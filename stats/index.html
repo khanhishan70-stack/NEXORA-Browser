@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXORA Mission Control (private)</title>
+<style>
+  :root { --bg:#05070a; --card:#0d1117; --line:rgba(0,255,249,.14); --neon:#00fff9; --txt:#f2f5f3; --mut:#9aa5a0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family:Inter,system-ui,sans-serif; padding:28px; }
+  h1 { margin:0; font-size:26px; letter-spacing:-.01em; }
+  .sub { color:var(--mut); font-size:13.5px; margin:6px 0 22px; }
+  .sub b { color:var(--neon); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:22px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .card small { color:var(--mut); font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+  .card strong { display:block; font-size:30px; margin-top:4px; }
+  .card strong.neon { color:var(--neon); }
+  .card .warn { color:#ffb020; font-size:13px; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  th,td { text-align:left; padding:11px 14px; font-size:13.5px; border-bottom:1px solid rgba(255,255,255,.06); }
+  th { color:var(--mut); font-weight:600; font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+  tr:last-child td { border-bottom:none; }
+  td.num { font-variant-numeric:tabular-nums; }
+  .tag { display:inline-block; font-family:monospace; font-size:12px; color:var(--neon); }
+  .row { display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+  button { background:rgba(0,255,249,.1); border:1px solid rgba(0,255,249,.3); color:var(--neon); border-radius:10px; padding:9px 18px; font-size:13.5px; font-weight:700; cursor:pointer; }
+  button:hover { background:rgba(0,255,249,.18); }
+  .note { margin-top:20px; color:var(--mut); font-size:13px; max-width:760px; line-height:1.65; }
+  .err { color:#ff7b72; }
+  #status { color:var(--mut); font-size:13px; }
+</style>
+</head>
+<body>
+  <h1>🛰️ NEXORA Mission Control</h1>
+  <p class="sub">Private dashboard — runs only on <b>your PC</b> (localhost). Nothing here is uploaded anywhere.</p>
+  <div class="row">
+    <button id="refresh">↻ Refresh now</button>
+    <span id="status">loading…</span>
+  </div>
+  <div class="grid" id="cards"></div>
+  <h2 style="font-size:17px;margin:6px 0 12px;">Downloads per release</h2>
+  <table>
+    <thead><tr><th>Release</th><th>Published</th><th>Downloads</th><th>Files</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p class="note" id="note"></p>
+<script>
+function fmt(n){ if(n==null||isNaN(n)) return '—'; return Number(n).toLocaleString('en-US'); }
+function mb(b){ if(!b&&b!==0) return ''; return (b/1048576).toFixed(0)+' MB'; }
+async function load(force){
+  var st = document.getElementById('status');
+  st.textContent = 'loading…';
+  try {
+    var r = await fetch(force ? '/api/refresh' : '/api/stats');
+    var s = await r.json();
+    render(s);
+    st.textContent = 'updated ' + (s.generated_at || '');
+  } catch(e) { st.innerHTML = '<span class="err">could not load stats: ' + e.message + '</span>'; }
+}
+function cell(v, isNum){
+  if (v && v.ok === false) return '<span class="warn" title="' + v.error + '">needs login</span>';
+  return fmt(v && v.count !== undefined ? v.count : v);
+}
+function render(s){
+  var cards = [
+    ['Total downloads', fmt(s.total_downloads), true],
+    ['Stars', fmt(s.stars), false],
+    ['Forks', fmt(s.forks), false],
+    ['Page views (14d)', s.views_14d && s.views_14d.ok ? fmt(s.views_14d.count) : '—', false],
+    ['Unique visitors', s.views_14d && s.views_14d.ok ? fmt(s.views_14d.uniques) : '—', false],
+    ['Clones (14d)', s.clones_14d && s.clones_14d.ok ? fmt(s.clones_14d.count) : '—', false]
+  ];
+  document.getElementById('cards').innerHTML = cards.map(function(c){
+    return '<div class="card"><small>' + c[0] + '</small><strong class="' + (c[2] ? 'neon' : '') + '">' + c[1] + '</strong></div>';
+  }).join('');
+  document.getElementById('rows').innerHTML = (s.releases || []).map(function(r){
+    var files = (r.assets || []).map(function(a){ return a.name + ' (' + fmt(a.downloads) + ')'; }).join('<br>');
+    return '<tr><td><span class="tag">' + r.tag + '</span></td><td>' + r.published + '</td><td class="num">' + fmt(r.downloads) + '</td><td>' + files + '</td></tr>';
+  }).join('') || '<tr><td colspan="4">no releases found</td></tr>';
+  document.getElementById('note').textContent = s.note || '';
+  if ((s.views_14d && !s.views_14d.ok) || (s.clones_14d && !s.clones_14d.ok)) {
+    document.getElementById('note').textContent += ' Views/clones show "needs login" unless this PC has gh auth (it does — check output).';
+  }
+}
+document.getElementById('refresh').addEventListener('click', function(){ load(true); });
+load(false);
+setInterval(function(){ load(false); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
