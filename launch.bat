@@ -118,8 +118,10 @@ echo    Backend ready on :5000
 
 REM ---- [4/4] Launch NEXORA Browser (full packaged build) ----
 echo [4/4] Launching NEXORA Browser...
-if exist "dist\NEXORA-win32-x64\NEXORA.exe" (
-  start "" "dist\NEXORA-win32-x64\NEXORA.exe"
+if exist "NEXORA-win32-x64\NEXORA.exe" (
+  start "" "NEXORA-win32-x64\NEXORA.exe" --no-sandbox
+) else if exist "dist\NEXORA-win32-x64\NEXORA.exe" (
+  start "" "dist\NEXORA-win32-x64\NEXORA.exe" --no-sandbox
 ) else (
   start "" "node_modules\electron\dist\electron.exe" "electron\main.js" --no-sandbox
 )

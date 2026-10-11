@@ -6,16 +6,17 @@ A modern desktop browsing experience designed for speed, productivity, customiza
 
 ## ⬇️ Download NEXORA here
 
-**Latest: v1.0.8 — Windows x64 (338 MB)**
+**Easiest: one-click Setup** (tiny download, installs the latest automatically)
 
-👉 **[Download NEXORA Browser v1.0.8](https://github.com/khanhishan70-stack/NEXORA-Browser/releases/download/v1.0.8/NEXORA_Browser_20261010_1859.zip)**
+👉 **[Download NEXORA-Setup.exe](https://github.com/khanhishan70-stack/NEXORA-Browser/releases/download/v1.0.8/NEXORA-Setup.exe)**
 
 Or pick any version: **[All releases](https://github.com/khanhishan70-stack/NEXORA-Browser/releases)**
 
-1. Extract the ZIP anywhere
-2. Open the `NEXORA Browser` folder
-3. Double-click **launch.bat** (sets up Python + free offline AI automatically on first run)
-4. Done — browse. Updates announce themselves inside the browser.
+Prefer portable? **[Direct ZIP (Windows x64, 338 MB)](https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest/download/NEXORA-Browser-Windows-x64.zip)** — extract anywhere, double-click **launch.bat**.
+
+1. Run the Setup, keep clicking Next
+2. NEXORA opens by itself — first run sets up Python + free offline AI automatically
+3. Done — browse. Updates announce themselves inside the browser.
 
 > Download NEXORA only from the official links above. Never trust third-party installers.
 
