@@ -22,7 +22,9 @@ VIAddVersionKey "FileDescription" "NEXORA Browser Setup"
 VIAddVersionKey "FileVersion" "1.0"
 VIAddVersionKey "LegalCopyright" "© 2026 NEXORA"
 
+!ifndef APP_URL
 !define APP_URL "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest/download/NEXORA-Browser-Windows-x64.zip"
+!endif
 !define APP_EXE "NEXORA-win32-x64\NEXORA.exe"
 
 ; ---- pages ----
@@ -45,10 +47,54 @@ Section "Install"
   SetOutPath "$INSTDIR"
 
   DetailPrint "Downloading NEXORA (one time, ~350 MB)..."
-  DetailPrint "This takes a few minutes - leave this window open."
-  nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $$drv = (Get-Item '$TEMP').PSDrive.Name; if (((Get-PSDrive $$drv).Free / 1GB) -lt 2) { 'NOSPACE' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii; return }; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${APP_URL}' -UseBasicParsing -OutFile '$TEMP\nexora-app.zip'; if ((Get-Item '$TEMP\nexora-app.zip').Length -gt 50000000) { 'OK' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } else { 'SMALL' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } } catch { ('FAIL:' + $$_.Exception.Message) | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii }"`
+  DetailPrint "Watch the progress below - leave this window open."
+  Delete "$TEMP\nexora-dl.txt"
+  Delete "$TEMP\nexora-app.zip"
+  ; Kill any downloader left behind by a previous cancelled run (it would lock the file).
+  nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter 'Name = ''powershell.exe''' | Where-Object { $$_.CommandLine -like ''*nexora-app.zip*'' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
   Pop $0
   Pop $1
+  ; Start the download detached (no window), then poll it with live MB + stall detection.
+  nsExec::ExecToStack `cmd /c start "" /b powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "try { $$drv = (Get-Item '$TEMP').PSDrive.Name; if (((Get-PSDrive $$drv).Free / 1GB) -lt 2) { 'NOSPACE' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii; return }; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${APP_URL}' -UseBasicParsing -OutFile '$TEMP\nexora-app.zip'; if ((Get-Item '$TEMP\nexora-app.zip').Length -gt 50000000) { 'OK' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } else { 'SMALL' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } } catch { ('FAIL:' + $$_.Exception.Message) | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii }"`
+  Pop $0
+  Pop $1
+  StrCpy $R8 -1
+  StrCpy $R9 0
+  StrCpy $R7 0
+  dl_poll:
+  Sleep 3000
+  IfFileExists "$TEMP\nexora-dl.txt" dl_result
+  FileOpen $R6 "$TEMP\nexora-app.zip" r
+  IfErrors dl_nofile
+  FileSeek $R6 0 END $R5
+  FileClose $R6
+  IntOp $R4 $R5 / 1048576
+  StrCmp $R5 $R8 dl_samelen
+  StrCpy $R8 $R5
+  StrCpy $R9 0
+  DetailPrint "Downloaded $R4 MB so far..."
+  IntOp $R7 $R7 + 1
+  IntCmp $R7 600 dl_toolong
+  Goto dl_poll
+  dl_samelen:
+  IntOp $R9 $R9 + 1
+  IntCmp $R9 40 dl_stalled
+  IntOp $R7 $R7 + 1
+  IntCmp $R7 600 dl_toolong
+  Goto dl_poll
+  dl_nofile:
+  IntOp $R7 $R7 + 1
+  IntCmp $R7 600 dl_toolong
+  Goto dl_poll
+  dl_stalled:
+  DetailPrint "No data for 2 minutes - connection stalled."
+  MessageBox MB_ICONSTOP "The download stalled (no data for 2 minutes). Check your connection and run Setup again."
+  Abort
+  dl_toolong:
+  DetailPrint "Taking too long (30+ minutes)."
+  MessageBox MB_ICONSTOP "The download is taking too long. Check your connection speed and try again later."
+  Abort
+  dl_result:
   FileOpen $2 "$TEMP\nexora-dl.txt" r
   IfErrors dl_fail
   FileRead $2 $3
