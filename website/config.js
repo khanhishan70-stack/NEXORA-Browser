@@ -6,12 +6,12 @@
  * of linking anywhere. Never invent or hard-code release URLs.
  * ============================================================ */
 window.NEXORA_SITE = {
-  githubRepoUrl: "https://github.com/khanhishan70-stack/browser-AI-3",
+  githubRepoUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser",
 
-  releasesUrl: "https://github.com/khanhishan70-stack/browser-AI-3/releases/latest",
+  releasesUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest",
 
   // Portable ZIP: extract, open "NEXORA Browser", run launch.bat (or NEXORA.exe).
-  windowsInstallerUrl: "https://github.com/khanhishan70-stack/browser-AI-3/releases/download/v1.0.8/NEXORA_Browser_20261010_1859.zip",
+  windowsInstallerUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/download/v1.0.8/NEXORA_Browser_20261010_1859.zip",
 
   releaseInfo: { version: "1.0.8", date: "2026-10-10", size: "338 MB", arch: "Windows x64" },
 
