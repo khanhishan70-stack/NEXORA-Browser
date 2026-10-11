@@ -121,5 +121,6 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\NEXORA Browser"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\NEXORA Browser"
   ; Your profile (history, logins, settings) is intentionally KEPT.
-  RMDir /r "$INSTDIR"
+  ; /REBOOTOK: binaries still held by a just-closed browser are removed on reboot.
+  RMDir /r /REBOOTOK "$INSTDIR"
 SectionEnd
