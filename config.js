@@ -10,10 +10,13 @@ window.NEXORA_SITE = {
 
   releasesUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest",
 
-  // Portable ZIP: extract, open "NEXORA Browser", run launch.bat (or NEXORA.exe).
-  windowsInstallerUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/download/v1.0.8/NEXORA_Browser_20261010_1859.zip",
+  // One-click Setup (tiny stub, always fetches the newest release).
+  windowsInstallerUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/download/v1.0.8/NEXORA-Setup.exe",
 
-  releaseInfo: { version: "1.0.8", date: "2026-10-10", size: "338 MB", arch: "Windows x64" },
+  // Portable ZIP, evergreen URL (no per-version edits needed).
+  portableZipUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest/download/NEXORA-Browser-Windows-x64.zip",
+
+  releaseInfo: { version: "1.0.8", date: "2026-10-11", size: "Setup ~1 MB · Portable 338 MB", arch: "Windows x64" },
 
   // Contact for security reports, when available.
   securityContact: "",
