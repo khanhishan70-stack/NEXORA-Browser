@@ -44,14 +44,7 @@
         });
       }
     });
-    document.querySelectorAll('[data-portable]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        trackEvent('download_portable', {
-          version: (cfg.releaseInfo && cfg.releaseInfo.version) || 'unknown'
-        });
-        window.open(cfg.portableZipUrl || cfg.releasesUrl, '_blank', 'noopener');
-      });
-    });
+
     document.querySelectorAll('[data-github]').forEach(function (b) {
       if (!hasGh) {
         b.addEventListener('click', function () {
