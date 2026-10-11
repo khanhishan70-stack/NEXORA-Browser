@@ -18,3 +18,18 @@ Then open **http://localhost:8099** — runs only on your PC.
 Want a live-user counter one day? That needs explicit opt-in telemetry in
 the browser + a counting server, designed openly with the privacy page
 updated first. Say the word.
+
+## True download clicks + visitor countries (website analytics)
+
+GitHub totals can't tell WHO downloaded or FROM WHERE — that history
+doesn't exist anywhere, before or now. For real geography + true
+human Download-button clicks going forward:
+
+1. Create a free GA4 property: https://analytics.google.com
+   (Admin → Create Property → Web stream → copy the Measurement ID `G-…`)
+2. Paste it as `gaMeasurementId` in `website/config.js`, push the site.
+3. From then on, Analytics → Reports shows visitor countries, and
+   Events → `download_nexora` shows true human download clicks per version.
+
+Tracking stays OFF (zero) until that ID is set — the browser itself
+never tracks anyone either way.

@@ -5,6 +5,29 @@
   var hasDl = !!(cfg.windowsInstallerUrl || cfg.releasesUrl);
   var hasGh = !!cfg.githubRepoUrl;
 
+  // ---- Optional website analytics (visitor countries + download clicks).
+  // OFF by default: nothing loads, nobody is tracked. Activates only when
+  // gaMeasurementId is set in config.js. This measures the WEBSITE, never
+  // the browser — NEXORA itself still phones home to nobody.
+  function trackEvent(name, params) {
+    try {
+      if (window.gtag) window.gtag('event', name, params || {});
+    } catch (e) {}
+  }
+  if (cfg.gaMeasurementId) {
+    try {
+      var gid = cfg.gaMeasurementId;
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(gid);
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag('js', new Date());
+      window.gtag('config', gid, { anonymize_ip: true });
+    } catch (e) {}
+  }
+
   // ---- Download / GitHub buttons follow configuration ----
   function wireButtons() {
     document.querySelectorAll('[data-download]').forEach(function (b) {
@@ -14,6 +37,9 @@
         b.textContent = /Windows/.test(b.textContent) ? b.textContent : 'Download — Coming Soon';
       } else {
         b.addEventListener('click', function () {
+          trackEvent('download_nexora', {
+            version: (cfg.releaseInfo && cfg.releaseInfo.version) || 'unknown'
+          });
           window.open(cfg.windowsInstallerUrl || cfg.releasesUrl, '_blank', 'noopener');
         });
       }
