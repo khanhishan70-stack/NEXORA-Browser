@@ -46,7 +46,7 @@ Section "Install"
 
   DetailPrint "Downloading NEXORA (one time, ~350 MB)..."
   DetailPrint "This takes a few minutes - leave this window open."
-  nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri '${APP_URL}' -OutFile '$TEMP\nexora-app.zip'; if ((Get-Item '$TEMP\nexora-app.zip').Length -gt 50000000) { 'OK' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } else { 'SMALL' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } } catch { ('FAIL:' + $$_.Exception.Message) | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii }"`
+  nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $$drv = (Get-Item '$TEMP').PSDrive.Name; if (((Get-PSDrive $$drv).Free / 1GB) -lt 2) { 'NOSPACE' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii; return }; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${APP_URL}' -UseBasicParsing -OutFile '$TEMP\nexora-app.zip'; if ((Get-Item '$TEMP\nexora-app.zip').Length -gt 50000000) { 'OK' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } else { 'SMALL' | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii } } catch { ('FAIL:' + $$_.Exception.Message) | Out-File '$TEMP\nexora-dl.txt' -Encoding ascii }"`
   Pop $0
   Pop $1
   FileOpen $2 "$TEMP\nexora-dl.txt" r
@@ -55,8 +55,15 @@ Section "Install"
   FileClose $2
   StrCmp $3 "OK$\r$\n" dl_ok
   StrCmp $3 "OK" dl_ok
-  DetailPrint "Download failed. Check your internet and try again."
-  MessageBox MB_ICONSTOP "Download failed. Check your internet connection and run Setup again."
+  StrCpy $4 $3 7
+  StrCmp $4 "NOSPACE" dl_nospace
+  StrCpy $5 $3 220 5
+  DetailPrint "Download failed: $5"
+  MessageBox MB_ICONSTOP "Download failed:$\n$5$\nCheck your internet and try again."
+  Abort
+  dl_nospace:
+  DetailPrint "Not enough disk space - free at least 2 GB and try again."
+  MessageBox MB_ICONSTOP "Not enough disk space. Setup needs about 2 GB free. Free some space and try again."
   Abort
   dl_fail:
   DetailPrint "Download failed. Check your internet and try again."
