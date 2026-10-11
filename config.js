@@ -16,5 +16,12 @@ window.NEXORA_SITE = {
   releaseInfo: { version: "1.0.8", date: "2026-10-10", size: "338 MB", arch: "Windows x64" },
 
   // Contact for security reports, when available.
-  securityContact: ""
+  securityContact: "",
+
+  // Google Analytics 4 (website stats ONLY: visitor countries + Download
+  // button clicks). The BROWSER itself still tracks nobody.
+  // Leave "" = zero tracking. To activate: create a free GA4 property at
+  // https://analytics.google.com, then paste its Measurement ID here.
+  // Example: "G-ABC123XYZ9"
+  gaMeasurementId: ""
 };
