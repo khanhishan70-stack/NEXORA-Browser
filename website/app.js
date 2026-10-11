@@ -83,6 +83,35 @@
   document.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
 
+  // ---- Live download counter (real GitHub totals, public API, no login) ----
+  // Shows actual completed downloads across all releases. This is the honest
+  // number: anonymous totals, including repeat downloads — not unique humans.
+  (function liveDownloads() {
+    var el = document.getElementById('dlInfo');
+    if (!el || !cfg.githubRepoUrl) return;
+    var line = document.createElement('span');
+    line.className = 'dl-meta';
+    line.id = 'dlLiveCount';
+    line.textContent = 'Counting real downloads…';
+    el.appendChild(line);
+    var repo = cfg.githubRepoUrl.replace(/\/$/, '').split('/').slice(-2).join('/');
+    fetch('https://api.github.com/repos/' + repo + '/releases?per_page=20')
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(function (rels) {
+        var total = 0, latest = 0;
+        (rels || []).forEach(function (rel, i) {
+          var n = 0;
+          (rel.assets || []).forEach(function (a) { n += Number(a.download_count || 0); });
+          total += n;
+          if (i === 0) latest = n;
+        });
+        line.textContent = 'Downloaded ' + total.toLocaleString('en-US') + ' times in total (' + latest.toLocaleString('en-US') + ' on the latest release) — live from GitHub.';
+      })
+      .catch(function () {
+        line.textContent = '';
+      });
+  })();
+
   // ---- Mobile nav ----
   var burger = document.getElementById('navBurger');
   var links = document.getElementById('navLinks');
