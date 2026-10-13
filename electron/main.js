@@ -537,6 +537,9 @@ function _applyChromeIdentity(wc) {
 }
 app.on('web-contents-created', function(e, wc) {
   try {
+    // did-start-loading first: page scripts in <head> must never see the
+    // real userAgentData before the shim installs (dom-ready is too late).
+    wc.on('did-start-loading', function() { _applyChromeIdentity(wc); });
     wc.on('dom-ready', function() { _applyChromeIdentity(wc); });
     wc.on('did-navigate', function() { _applyChromeIdentity(wc); });
     wc.on('did-navigate-in-page', function() { _applyChromeIdentity(wc); });
@@ -629,6 +632,10 @@ function _applyUAHeaders(headers, url) {
       headers['sec-ch-ua-platform-version'] = '"15.0.0"';
       headers['sec-ch-ua-mobile'] = '?0';
       delete headers['sec-ch-ua-model'];
+      // White Google login: the server renders dark HTML from this hint,
+      // ignoring any DOM color-scheme injection. Force light like Chrome
+      // would show with a light OS theme.
+      try { headers['sec-ch-prefers-color-scheme'] = 'light'; } catch(e2) {}
     }
   } catch(e) {}
   return headers;
