@@ -503,25 +503,35 @@ app.on('web-contents-created', function(e, wc) {
 // string and client-hint headers the main process already serves them.
 // Hostname-gated: the main window (file://) and every other site are untouched.
 var _CHROME_IDENTITY_RE = /(^|\.)(discord\.com|whatsapp\.com)$/i;
-var _CHROME_IDENTITY_JS = "(function(){"
+function _chromeIdentityJS(major, full) {
+  major = String(major || '148'); full = String(full || (major + '.0.0.0'));
+  return "(function(){"
   + "if(window.__neoChromeId)return;window.__neoChromeId=true;"
   + "try{"
-  + "var brands=[{brand:'Chromium',version:'153'},{brand:'Not/A)Brand',version:'8'},{brand:'Google Chrome',version:'153'}];"
+  + "var brands=[{brand:'Chromium',version:'" + major + "'},{brand:'Not/A)Brand',version:'8'},{brand:'Google Chrome',version:'" + major + "'}];"
   + "var uad={brands:brands,mobile:false,platform:'Windows',"
-  + "getHighEntropyValues:function(h){return Promise.resolve({brands:brands,mobile:false,platform:'Windows',platformVersion:'15.0.0',architecture:'x86',bitness:'64',model:'',uaFullVersion:'153.0.8010.53'});}};"
+  + "getHighEntropyValues:function(h){return Promise.resolve({brands:brands,mobile:false,platform:'Windows',platformVersion:'15.0.0',architecture:'x86',bitness:'64',model:'',uaFullVersion:'" + full + "'});}};"
   + "try{Object.defineProperty(window.navigator,'userAgentData',{get:function(){return uad;},configurable:true});}"
   + "catch(e){try{window.navigator.__defineGetter__('userAgentData',function(){return uad;});}catch(e2){}}"
   + "}catch(e){}"
   + "})();";
+}
+var _CHROME_IDENTITY_JS = _chromeIdentityJS(153, '153.0.8010.53');
+// Google auth pages get the REAL Chrome version so UA string, client hints
+// and userAgentData all agree (Google cross-checks them during OAuth).
+var _GOOGLE_AUTH_RE = /(^|\.)accounts\.google\.com$/i;
 function _applyChromeIdentity(wc) {
   try {
     var u = '';
     try { u = (wc.getURL && wc.getURL()) || ''; } catch(e) {}
     var h = '';
     try { h = new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch(e) { return; }
-    if (!_CHROME_IDENTITY_RE.test(h)) return;
+    var js = null;
+    if (_CHROME_IDENTITY_RE.test(h)) js = _CHROME_IDENTITY_JS;
+    else if (_GOOGLE_AUTH_RE.test(h)) js = _chromeIdentityJS(CHROME_MAJOR, CHROME_VERSION);
+    if (!js) return;
     var p = null;
-    try { p = wc.executeJavaScript(_CHROME_IDENTITY_JS, false); } catch(e) { return; }
+    try { p = wc.executeJavaScript(js, false); } catch(e) { return; }
     if (p && p.catch) p.catch(function(){});
   } catch(e) {}
 }
@@ -567,6 +577,14 @@ function getUAForURL(url) {
     for (var k = 0; k < _modernUASites.length; k++) {
       if (u.indexOf(_modernUASites[k]) !== -1) return MODERN_UA;
     }
+    // Google auth pages must not carry the Electron token: Google's OAuth
+    // fails token issuance for clients that self-identify as embedded
+    // (GitHub then reports "could not validate the response"). Real Chrome
+    // version, no Electron suffix.
+    try {
+      var _gh = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+      if (_gh === 'accounts.google.com' || _gh.endsWith('.accounts.google.com')) return CHROME_UA;
+    } catch(e) {}
     // Per-site opt-in Chrome UA override for streaming/media hosts
     for (var i = 0; i < _streamingSites.length; i++) {
       if (u.indexOf(_streamingSites[i]) !== -1) return CHROME_UA;
@@ -598,6 +616,21 @@ function _applyUAHeaders(headers, url) {
       break;
     }
   }
+  // Google auth: hints must agree with the pure-Chrome UA string above, at
+  // the REAL Chromium version, or Google's OAuth cross-checks fail.
+  try {
+    var _gh2 = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    if (_gh2 === 'accounts.google.com' || _gh2.endsWith('.accounts.google.com')) {
+      var _mj = String(CHROME_MAJOR || 148);
+      var _fv = String(CHROME_VERSION || (_mj + '.0.0.0'));
+      headers['sec-ch-ua'] = '"Chromium";v="' + _mj + '", "Not/A)Brand";v="8", "Google Chrome";v="' + _mj + '"';
+      headers['sec-ch-ua-full-version-list'] = '"Chromium";v="' + _fv + '", "Not/A)Brand";v="8.0.0.0", "Google Chrome";v="' + _fv + '"';
+      headers['sec-ch-ua-platform'] = '"Windows"';
+      headers['sec-ch-ua-platform-version'] = '"15.0.0"';
+      headers['sec-ch-ua-mobile'] = '?0';
+      delete headers['sec-ch-ua-model'];
+    }
+  } catch(e) {}
   return headers;
 }
 // True for streaming/media hosts. Used to keep background throttling disabled
