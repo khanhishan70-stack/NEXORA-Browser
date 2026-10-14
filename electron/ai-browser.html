@@ -15523,6 +15523,25 @@
       wv.addEventListener('did-navigate', (e) => {
         _PT('did-navigate');
         _navPending = null;
+        // Classic white Google sign-in: nudge interactive sign-in forms to the
+        // classic UI (service=lso), once per page. NEVER touches OAuth
+        // authorize, consent, callback, myaccount or picker URLs — only the
+        // human-facing identifier/challenge forms.
+        if (wv === siteWebview) {
+          try {
+            var _gu = new URL(e.url);
+            var _gh = _gu.hostname.replace(/^www\./, '').toLowerCase();
+            if (_gh === 'accounts.google.com'
+                && /^\/(v3\/signin\/(identifier|challenge)|signin\/v2\/|ServiceLogin)/i.test(_gu.pathname)
+                && !_gu.searchParams.has('service')
+                && window.__neoLsoLast !== e.url) {
+              window.__neoLsoLast = e.url;
+              _gu.searchParams.set('service', 'lso');
+              navigate(_gu.toString());
+              return;
+            }
+          } catch(_e6) {}
+        }
         // History-lock SPA catch + re-arm: view changes of the ACTIVE tab.
         if (wv === siteWebview) {
           var __hpv = window.__histPrevWvUrl || '';
