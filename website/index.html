@@ -29,6 +29,7 @@
     <a href="#privacy">Privacy &amp; Security</a>
     <a href="#screens">Screenshots</a>
     <a href="#whatsnew">What's New</a>
+    <a href="#setup">Setup</a>
     <a href="#faq">FAQ</a>
   </nav>
   <div class="nav-actions">
@@ -171,6 +172,22 @@
   </div>
 </section>
 
+<!-- ================= SETUP ================= -->
+<section class="section" id="setup">
+  <p class="kicker">Setup guide</p>
+  <h2>UP AND RUNNING<br>IN 5 MINUTES.</h2>
+  <p class="sub">No installers, no accounts, no keys. One file does the whole setup for you.</p>
+  <div class="cards">
+    <article class="card reveal"><div class="card-ico">⬇️</div><h3>1 · Download the ZIP</h3><p>Hit <strong>Download for Windows</strong> above — Windows 10/11, 64-bit. You need internet once and about 2&nbsp;GB free (browser + AI model).</p></article>
+    <article class="card reveal"><div class="card-ico">📂</div><h3>2 · Extract it anywhere</h3><p>Right-click the ZIP → <strong>Extract All</strong>. Open the <strong>"NEXORA Browser"</strong> folder inside.</p></article>
+    <article class="card reveal"><div class="card-ico">▶️</div><h3>3 · Double-click launch.bat</h3><p>That's the whole install. First run takes a few minutes: it finds or installs real Python, installs the AI pieces, then installs Ollama and downloads the free offline AI model (one time only).</p></article>
+    <article class="card reveal"><div class="card-ico">🌐</div><h3>4 · Browse — AI included</h3><p>The browser opens by itself. ESTA chat works out of the box, even with no internet, thanks to the on-device model.</p></article>
+    <article class="card reveal"><div class="card-ico">☁️</div><h3>5 · Cloud AI (optional)</h3><p>Want the smarter cloud chat too? Grab a free key at <strong>console.groq.com</strong>, paste it as <strong>GROQ_API_KEY=…</strong> in <strong>ai UI DESIGN\backend\.env</strong>, and re-run launch.bat.</p></article>
+    <article class="card reveal"><div class="card-ico">🛟</div><h3>Stuck? 3 quick fixes</h3><p><strong>SmartScreen warning</strong> → More info → Run anyway (we're not signed yet). <strong>"Backend FAILED"</strong> → open <strong>pip-install.log</strong> next to launch.bat, the last lines say why (usually no internet — just re-run). <strong>Nothing opens</strong> → close any other NEXORA window first; two copies can't share one profile.</p></article>
+  </div>
+  <p class="fine">Every rerun of launch.bat is safe: it skips what's already installed and only fixes what's missing.</p>
+</section>
+
 <!-- ================= PRIVACY ================= -->
 <section class="section" id="privacy">
   <p class="kicker">Privacy &amp; Security</p>
@@ -206,7 +223,7 @@
   <div class="foot-inner">
     <a class="brand" href="#top"><svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0d1512"/><path d="M18 46V18l28 28V18" stroke="#00fff9" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-word">NEXORA<em>BROWSER</em></span></a>
     <nav class="foot-links" aria-label="Footer">
-      <a href="#features">Features</a><a href="#esta">ESTA</a><a href="#screens">Screenshots</a><a href="#download">Download</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a>
+      <a href="#features">Features</a><a href="#esta">ESTA</a><a href="#screens">Screenshots</a><a href="#download">Download</a><a href="#setup">Setup</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a>
     </nav>
     <p class="fine">© 2026 NEXORA. Free browser, open source — policies publish with the next milestone.</p>
   </div>
