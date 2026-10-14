@@ -3,9 +3,30 @@ setlocal
 cd /d "%~dp0"
 
 REM ============================================================
-REM  NEXORA BROWSER - ONE-CLICK LAUNCHER
-REM  Starts:  1) Offline AI (Ollama)   2) AI backend   3) Browser
+REM  NEXORA BROWSER - ONE-CLICK LAUNCHER (one-time setup)
+REM  First run:  sets up Python, AI backend, Ollama, and carries
+REM              over your data from any previous install.
+REM  Later runs: setup is skipped, browser launches straight away.
+REM  (After setup you can also just double-click NEXORA.exe.)
 REM ============================================================
+
+REM ---- Carry over an old install's data (new folder, first run only) ----
+if exist "ai UI DESIGN\backend\.env" goto migrate_done
+if exist "ai UI DESIGN\backend\neo_accounts" goto migrate_done
+if exist "ai UI DESIGN\backend\memory" goto migrate_done
+set CURDIR=%~dp0
+if "%CURDIR:~-1%"=="\" set CURDIR=%CURDIR:~0,-1%
+call :migrate_from "%USERPROFILE%\Downloads\NEXORA-Browser-Windows-x64\NEXORA Browser"
+for /d %%D in ("%~dp0..\NEXORA*") do call :migrate_from "%%D"
+:migrate_done
+
+REM ---- One-time setup: marked healthy before = launch straight away ----
+set STAGE_OK=1
+if not exist "setup.done" set STAGE_OK=
+if not exist "NEXORA-win32-x64\NEXORA.exe" if not exist "dist\NEXORA-win32-x64\NEXORA.exe" if not exist "node_modules\electron\dist\electron.exe" set STAGE_OK=
+"ai UI DESIGN\backend\venv\Scripts\python.exe" -c "import flask" >nul 2>&1
+if errorlevel 1 set STAGE_OK=
+if defined STAGE_OK goto fast_launch
 
 REM ---- [1/4] Fix backend venv if it was copied from another PC ----
 echo [1/4] Checking Python venv...
@@ -123,8 +144,10 @@ powershell -NoProfile -Command "if (Test-Path 'backend.log') { Get-Content 'back
 goto backend_done
 :backend_ready
 echo    Backend ready on :5000
+echo Setup completed OK %DATE% %TIME% > "setup.done"
 :backend_done
 
+:launch_browser
 REM ---- [4/4] Launch NEXORA Browser (full packaged build) ----
 echo [4/4] Launching NEXORA Browser...
 if exist "NEXORA-win32-x64\NEXORA.exe" (
@@ -157,4 +180,24 @@ if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" set PYBIN=%LOCALA
 if exist "C:\Program Files\Python313\python.exe" set PYBIN=C:\Program Files\Python313\python.exe
 if exist "C:\Program Files (x86)\Python313\python.exe" set PYBIN=C:\Program Files (x86)\Python313\python.exe
 :findpy_done
+exit /b 0
+
+:fast_launch
+echo Setup already complete - launching NEXORA Browser straight away.
+echo (Tip: delete setup.done next to this file to force a full setup check.)
+goto launch_browser
+
+REM ---- :migrate_from "folder" -> copies old user data in (never overwrites) ----
+:migrate_from
+set MIGSRC=%~1
+if not defined MIGSRC exit /b 0
+if /i "%MIGSRC%"=="%CURDIR%" exit /b 0
+set MIGBACK=%MIGSRC%\ai UI DESIGN\backend
+if not exist "%MIGBACK%\.env" if not exist "%MIGBACK%\neo_accounts" if not exist "%MIGBACK%\memory" exit /b 0
+echo    Found your previous install, carrying over your data...
+if not exist "ai UI DESIGN\backend\.env" if exist "%MIGBACK%\.env" copy /y "%MIGBACK%\.env" "ai UI DESIGN\backend\.env" >nul
+for %%F in (neo_accounts memory vault documents rag_docs generated_code editor_assets) do (
+  if not exist "ai UI DESIGN\backend\%%F" if exist "%MIGBACK%\%%F" xcopy /e /i /y /q "%MIGBACK%\%%F" "ai UI DESIGN\backend\%%F" >nul
+)
+echo    Done - accounts, keys, memory and documents carried over.
 exit /b 0
