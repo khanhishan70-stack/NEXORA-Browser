@@ -9,7 +9,7 @@ REM ============================================================
 
 REM ---- [1/4] Fix backend venv if it was copied from another PC ----
 echo [1/4] Checking Python venv...
-"ai UI DESIGN\backend\venv\Scripts\python.exe" -c "import pydantic_core, PIL" >nul 2>&1
+"ai UI DESIGN\backend\venv\Scripts\python.exe" -c "import pydantic_core, PIL, flask" >nul 2>&1
 if %ERRORLEVEL% EQU 0 goto venv_ok
 echo    Venv missing or broken (corrupted packages). Recreating...
 call :find_python
@@ -35,8 +35,17 @@ if %ERRORLEVEL% EQU 0 goto venv_install
 set SKIP_BACKEND=1
 goto venv_done
 :venv_install
-echo    Installing dependencies, one-time only...
-"ai UI DESIGN\backend\venv\Scripts\python.exe" -m pip install -r "ai UI DESIGN\backend\requirements.txt" >nul 2>&1
+echo    Installing dependencies, one-time only (this can take a few minutes)...
+"ai UI DESIGN\backend\venv\Scripts\python.exe" -m pip install -r "ai UI DESIGN\backend\requirements.txt" > "pip-install.log" 2>&1
+if %ERRORLEVEL% EQU 0 goto venv_verify
+echo    WARNING: dependency install reported errors. Last lines:
+powershell -NoProfile -Command "Get-Content 'pip-install.log' -Tail 8"
+:venv_verify
+"ai UI DESIGN\backend\venv\Scripts\python.exe" -c "import flask" >nul 2>&1
+if %ERRORLEVEL% EQU 0 goto venv_ok
+echo    ERROR: AI backend still unusable (flask missing). See pip-install.log for details.
+set SKIP_BACKEND=1
+goto venv_done
 :venv_ok
 echo    OK.
 :venv_done
