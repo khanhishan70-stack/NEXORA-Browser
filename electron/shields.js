@@ -215,9 +215,13 @@ const YT_AD_PATHS = [
 ];
 function isYouTubeAdRequest(url) {
   const u = String(url || '').toLowerCase();
-  // Ad video segments served from the CDN (content segments have no adformat).
+  // Ad video segments served from the CDN carry adformat=/adurl= params.
+  // NOTE: ctier=/oad= also appear on videoplayback URLs but they ride on
+  // EVERY content segment too (ctier=L is just a bandwidth-tier flag), so
+  // matching them cancels the actual video and stalls the player forever.
+  // Only adformat/adurl are proven ad-only markers.
   if (u.indexOf('googlevideo.com') !== -1 && u.indexOf('/videoplayback') !== -1) {
-    if (/[?&](adformat=|adurl=|oad=|ctier=l)/.test(u)) return true;
+    if (/[?&](adformat=|adurl=)/.test(u)) return true;
   }
   // Dedicated YouTube ad-serving hosts.
   if (/\/\/(ads\.youtube\.com|youtubeadvertising\.com)\//.test(u)) return true;
@@ -230,7 +234,22 @@ function isYouTubeAdRequest(url) {
   return false;
 }
 
-// Hosts Spotify relies on for playback (page, API/possession, player assets,
+// Debug twin: returns the REASON a URL would match ('' = no match). Trace-only.
+function isYouTubeAdDebug(url) {
+  const u = String(url || '').toLowerCase();
+  if (u.indexOf('googlevideo.com') !== -1 && u.indexOf('/videoplayback') !== -1) {
+    const m = u.match(/[?&](adformat=|adurl=)/);
+    if (m) return 'videoplayback-param:' + m[1];
+  }
+  if (/\/\/(ads\.youtube\.com|youtubeadvertising\.com)\//.test(u)) return 'ad-host';
+  if (u.indexOf('youtube.com') === -1 && u.indexOf('youtube-nocookie.com') === -1) {
+    return '';
+  }
+  for (let i = 0; i < YT_AD_PATHS.length; i++) {
+    if (u.indexOf(YT_AD_PATHS[i]) !== -1) return 'yt-path:' + YT_AD_PATHS[i];
+  }
+  return '';
+}
 // and the audio CDN). EasyList contains rules targeting these that break
 // ad-supported (Free) playback — the ads and the music stream from the same
 // CDN, so blocking the endpoints makes every track fail with "Something went
@@ -395,17 +414,35 @@ class NeoShields {
   // session.
   makeHandler() {
     return (details, callback) => {
+      const _t0 = Date.now();
+      const _trace = process.env.NEO_SHIELD_TRACE === '1' &&
+        /youtube|googlevideo|doubleclick|googlesyndication|pagead/i.test(details.url || '');
+      const _done = (r) => {
+        try {
+          if (_trace) {
+            const ms = Date.now() - _t0;
+            if (r && r.cancel) {
+              fs.appendFileSync('C:\\Users\\Admin\\AppData\\Local\\Temp\\opencode\\shield-trace.log',
+                'CANCEL[' + (details.resourceType || '?') + '] ' + ms + 'ms ' + (details.url || '').slice(0, 160) + '\n');
+            } else if (ms > 50) {
+              fs.appendFileSync('C:\\Users\\Admin\\AppData\\Local\\Temp\\opencode\\shield-trace.log',
+                'SLOW ' + ms + 'ms ' + (details.url || '').slice(0, 160) + '\n');
+            }
+          }
+        } catch (e) {}
+        callback(r);
+      };
       try {
         const url = details.url || '';
-        if (!url) { callback({}); return; }
+        if (!url) { _done({}); return; }
 
         // Chromium internal favicon -> transparent 1x1 (matches old behavior).
         if (url.indexOf('faviconv2') !== -1) {
-          callback({ redirectURL: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' });
+          _done({ redirectURL: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' });
           return;
         }
-        if (!/^https?:\/\//i.test(url)) { callback({}); return; }
-        if (this.settings.enabled !== true) { callback({}); return; }
+        if (!/^https?:\/\//i.test(url)) { _done({}); return; }
+        if (this.settings.enabled !== true) { _done({}); return; }
 
         // Main frame = navigation. Reset the per-site counter when the site
         // key changes (fresh page-load stats like Brave). Only the MALICIOUS
@@ -425,13 +462,13 @@ class NeoShields {
               if (res && res.match === true) {
                 const att = this._lastMainFrameSite || site;
                 this._count(att, 'malicious');
-                callback({ cancel: true });
+                _done({ cancel: true });
                 return;
               }
             } catch (e) {}
           }
           this._lastMainFrameSite = site;
-          callback({});
+          _done({});
           return;
         }
 
@@ -445,11 +482,11 @@ class NeoShields {
           } catch (e) {}
         }
         const sourceSite = eTLD1(sourceUrl);
-        if (sourceSite && this.siteOverrides[sourceSite] === false) { callback({}); return; }
+        if (sourceSite && this.siteOverrides[sourceSite] === false) { _done({}); return; }
 
         // Spotify playback-critical hosts always pass (see SPOTIFY_STREAM_HOSTS
         // above) — EasyList breaks ad-supported Spotify otherwise.
-        if (sourceSite && isSpotifyPlaybackHost(url, sourceSite)) { callback({}); return; }
+        if (sourceSite && isSpotifyPlaybackHost(url, sourceSite)) { _done({}); return; }
 
         // Build adblocker Request directly from Electron details.
         let request;
@@ -481,7 +518,7 @@ class NeoShields {
           const frameSite = this._lastMainFrameSite || '';
           const reqSite = eTLD1(url);
           if (frameSite && reqSite && frameSite === reqSite) {
-            callback({});
+            _done({});
             return;
           }
         }
@@ -495,16 +532,30 @@ class NeoShields {
             } catch (e) {}
           }
         }
-        if (!blockedCat) { callback({}); return; }
+        if (!blockedCat) { _done({}); return; }
 
         // Count (per-site + global) with the source site if known, else the
         // request's own host (fallback attribution).
         const attSite = sourceSite || eTLD1(url);
         if (attSite) this._count(attSite, blockedCat);
 
-        callback({ cancel: true });
+        try {
+          if (process.env.NEO_SHIELD_TRACE === '1' && url.indexOf('videoplayback') !== -1) {
+            let rule = '';
+            try {
+              const dbg = this.eng[blockedCat] && this.eng[blockedCat].match(request);
+              if (dbg && dbg.filter) rule = 'engine:' + String(dbg.filter).slice(0, 120);
+            } catch (e) {}
+            if (!rule) {
+              try { rule = 'fast:' + (isYouTubeAdDebug(url) || 'unknown'); } catch (e) {}
+            }
+            fs.appendFileSync('C:\\Users\\Admin\\AppData\\Local\\Temp\\opencode\\shield-trace.log',
+              'WHY[' + blockedCat + '] ' + rule + ' :: ' + url + '\n');
+          }
+        } catch (e) {}
+        _done({ cancel: true });
       } catch (e) {
-        callback({});
+        _done({});
       }
     };
   }
