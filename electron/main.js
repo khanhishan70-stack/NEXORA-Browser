@@ -2179,6 +2179,7 @@ app.whenReady().then(async () => {
   // Electron allows only ONE onBeforeRequest listener per session, so this module
   // owns that listener on default + persist:webview + persist:webview_wcv.
   const { NeoShields } = require('./shields');
+  const { YT_SKIPPER_JS } = require('./shields');
   const _shields = new NeoShields({ getMainWindow: () => _mainBrowserWin() });
   _shields.registrations();
 
@@ -6203,25 +6204,37 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
 
   // Shields DOM ad-sniper: a lightweight MutationObserver injected into every
   // page that yanks dynamically-inserted ad elements the filter lists miss.
-  // Only runs while shields are enabled; cheap and single-shot per URL.
-  var _adCleanerLastUrl = '';
+  // Only runs while shields are enabled. Both payloads below self-guard
+  // (window.__neoAdCleaner / window.__nxYtAdSkip), so re-injection on every
+  // navigation event is a harmless no-op after the first — and a URL-keyed
+  // dedup would WRONGLY skip document reloads of the same URL, leaving ads
+  // unskipped. Never dedup by URL here.
   var _adCleanerSrc = null;
   function injectShieldsDomCleaner(contents) {
     try {
       if (!_shields || !_shields.settings || _shields.settings.enabled !== true) return;
-      var url = contents.getURL() || '';
+      var url = (contents.getURL && contents.getURL()) || contents._neoLastUrl || '';
       if (!/^https?:/i.test(url)) return;
-      var key = url.split('#')[0];
-      if (key === _adCleanerLastUrl) return;
       var site = '';
       try { site = _shields.eTLD1 ? _shields.eTLD1(url) : ''; } catch (e) {}
       if (site && _shields.siteOverrides && _shields.siteOverrides[site] === false) return;
-      _adCleanerLastUrl = key;
       if (!_adCleanerSrc) {
         try { _adCleanerSrc = fs.readFileSync(path.join(__dirname, 'ad-cleaner.js'), 'utf-8'); } catch (e) { _adCleanerSrc = ''; }
       }
       if (!_adCleanerSrc) return;
       contents.executeJavaScript(_adCleanerSrc).catch(function(){});
+      // YouTube in-player ad skipper (same code the cosmetic pipeline
+      // injects into the site view). This runs in EVERY guest — tab
+      // webviews included — so ads skip no matter which view plays them.
+      try {
+        var _skipHost = '';
+        try { _skipHost = new URL(url).hostname.toLowerCase(); } catch (e) {}
+        if (/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(_skipHost)) {
+          if (_shields.settings.categories && _shields.settings.categories.ads !== false && YT_SKIPPER_JS) {
+            contents.executeJavaScript(YT_SKIPPER_JS).catch(function(){});
+          }
+        }
+      } catch (e) {}
     } catch(e) {}
   }
 

@@ -234,6 +234,26 @@ function isYouTubeAdRequest(url) {
   return false;
 }
 
+// YouTube in-player ad skipper, single source of truth. Some ad creatives
+// carry no network-level markers (same CDN shape as content), so the player
+// itself is driven: while .ad-showing is on, mute + sprint the ad to its end
+// and hit Skip the moment it appears; overlay/sponsored units are re-hidden
+// on every sweep. Idempotent (guard flag) so repeat injections never stack
+// intervals. Used by getCosmetic() AND by main.js for every guest webview.
+const YT_SKIPPER_JS =
+  '\n;(function(){if(window.__nxYtAdSkip)return;window.__nxYtAdSkip=true;window.__nxYtAdMuted=false;window.__nxYtRate=1;' +
+  'var H=[".ytp-ad-overlay-container",".ytp-ad-text-overlay",".ytp-ad-image-overlay",".ytp-ad-module","#player-ads",".ytd-action-companion-ad-renderer","ytd-display-ad-renderer","ytd-ad-slot-renderer","ytd-promoted-video-renderer","ytd-compact-promoted-video-renderer","ytd-statement-banner-renderer","#masthead-ad",".ytp-ad-message-container"];' +
+  'function sweep(){try{var p=document.querySelector("#movie_player")||document.querySelector(".html5-video-player");' +
+  'var v=document.querySelector("video");var ad=!!(p&&p.classList&&p.classList.contains("ad-showing"));' +
+  'if(ad&&!window.__nxYtWasAd&&v){window.__nxYtRate=v.playbackRate||1;}' +
+  'window.__nxYtWasAd=ad;' +
+  'if(v&&ad){try{if(!v.muted){v.muted=true;window.__nxYtAdMuted=true;}v.playbackRate=16;' +
+  'var d=v.duration;if(isFinite(d)&&d>0){try{v.currentTime=Math.max(0,d-0.15);}catch(e){}}}catch(e){}' +
+  'var b=document.querySelector(".ytp-skip-ad-button,.ytp-ad-skip-button,.ytp-ad-skip-button-modern");if(b){try{b.click();}catch(e){}}}' +
+  'else if(v&&window.__nxYtAdMuted){try{v.muted=false;v.playbackRate=window.__nxYtRate||1;}catch(e){}window.__nxYtAdMuted=false;}' +
+  'for(var i=0;i<H.length;i++){var els=document.querySelectorAll(H[i]);for(var j=0;j<els.length;j++){try{els[j].style.setProperty("display","none","important");}catch(e){}}}}catch(e){}}' +
+  'setInterval(sweep,500);sweep();})();';
+
 // and the audio CDN). EasyList contains rules targeting these that break
 // ad-supported (Free) playback — the ads and the music stream from the same
 // CDN, so blocking the endpoints makes every track fail with "Something went
@@ -454,13 +474,6 @@ class NeoShields {
         // above) — EasyList breaks ad-supported Spotify otherwise.
         if (sourceSite && isSpotifyPlaybackHost(url, sourceSite)) { callback({}); return; }
 
-        // YouTube bypass. Shields leave YouTube fully alone so videos load
-        // and play exactly like shields-off: fast, page intact, nothing
-        // half-blocked. googlevideo.com serves YouTube content exclusively,
-        // so it is always allowed (media segments often carry no referrer).
-        if (sourceSite === 'youtube.com' || sourceSite === 'youtu.be' || sourceSite === 'youtube-nocookie.com') { callback({}); return; }
-        try { if (/\/\/(?:[a-z0-9-]+\.)*googlevideo\.com\//i.test(url)) { callback({}); return; } } catch (e) {}
-
         // Build adblocker Request directly from Electron details.
         let request;
         try {
@@ -599,12 +612,6 @@ class NeoShields {
       if (this.settings.categories && this.settings.categories.ads === false) return { css: '', injections: '' };
       const site = eTLD1(url);
       if (site && this.siteOverrides[site] === false) return { css: '', injections: '' };
-      // YouTube bypass (matches the network bypass in makeHandler): no
-      // cosmetic CSS, no scriptlets — the page renders exactly like
-      // shields-off.
-      if (site === 'youtube.com' || site === 'youtube-nocookie.com' || site === 'youtu.be') {
-        return { css: '', injections: '' };
-      }
       const parsed = parseDomain(url);
       let css = '';
       let injections = '';
@@ -623,6 +630,17 @@ class NeoShields {
         const styles = out.styles || '';
         css = typeof styles === 'string' ? styles : (Array.isArray(styles) ? styles.join('\n') : '');
         injections = typeof out.injections === 'string' ? out.injections : (Array.isArray(out.injections) ? out.injections.join('\n') : '');
+      }
+      // YouTube overlay/banner ad containers + in-player ad skipper
+      // (YT_SKIPPER_JS — same code main.js injects into every guest webview).
+      if (site === 'youtube.com' || site === 'youtube-nocookie.com' || site === 'youtu.be') {
+        css += '\n.ytp-ad-overlay-container,.ytp-ad-module,.ytp-ad-image-overlay,' +
+               '.ytp-ad-text-overlay,.ytp-ad-progress-list,.ytd-action-companion-ad-renderer,' +
+               'ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-ad-slot-renderer,' +
+               'ytd-promoted-video-renderer,ytd-compact-promoted-video-renderer,' +
+               'ytd-statement-banner-renderer,.ytp-ad-message-container,' +
+               '#player-ads,#masthead-ad,.ytd-banner-promo-renderer{display:none !important;visibility:hidden !important;}';
+        injections += YT_SKIPPER_JS;
       }
       return { css: css, injections: injections };
     } catch (e) {
@@ -911,4 +929,4 @@ class NeoShields {
   }
 }
 
-module.exports = { NeoShields, eTLD1, ANALYTICS_RE, isPopupRule, stripPopupOption, isYouTubeAdRequest };
+module.exports = { NeoShields, eTLD1, ANALYTICS_RE, isPopupRule, stripPopupOption, isYouTubeAdRequest, YT_SKIPPER_JS };
