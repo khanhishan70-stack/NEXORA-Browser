@@ -234,22 +234,6 @@ function isYouTubeAdRequest(url) {
   return false;
 }
 
-// Debug twin: returns the REASON a URL would match ('' = no match). Trace-only.
-function isYouTubeAdDebug(url) {
-  const u = String(url || '').toLowerCase();
-  if (u.indexOf('googlevideo.com') !== -1 && u.indexOf('/videoplayback') !== -1) {
-    const m = u.match(/[?&](adformat=|adurl=)/);
-    if (m) return 'videoplayback-param:' + m[1];
-  }
-  if (/\/\/(ads\.youtube\.com|youtubeadvertising\.com)\//.test(u)) return 'ad-host';
-  if (u.indexOf('youtube.com') === -1 && u.indexOf('youtube-nocookie.com') === -1) {
-    return '';
-  }
-  for (let i = 0; i < YT_AD_PATHS.length; i++) {
-    if (u.indexOf(YT_AD_PATHS[i]) !== -1) return 'yt-path:' + YT_AD_PATHS[i];
-  }
-  return '';
-}
 // and the audio CDN). EasyList contains rules targeting these that break
 // ad-supported (Free) playback — the ads and the music stream from the same
 // CDN, so blocking the endpoints makes every track fail with "Something went
@@ -414,35 +398,17 @@ class NeoShields {
   // session.
   makeHandler() {
     return (details, callback) => {
-      const _t0 = Date.now();
-      const _trace = process.env.NEO_SHIELD_TRACE === '1' &&
-        /youtube|googlevideo|doubleclick|googlesyndication|pagead/i.test(details.url || '');
-      const _done = (r) => {
-        try {
-          if (_trace) {
-            const ms = Date.now() - _t0;
-            if (r && r.cancel) {
-              fs.appendFileSync('C:\\Users\\Admin\\AppData\\Local\\Temp\\opencode\\shield-trace.log',
-                'CANCEL[' + (details.resourceType || '?') + '] ' + ms + 'ms ' + (details.url || '').slice(0, 160) + '\n');
-            } else if (ms > 50) {
-              fs.appendFileSync('C:\\Users\\Admin\\AppData\\Local\\Temp\\opencode\\shield-trace.log',
-                'SLOW ' + ms + 'ms ' + (details.url || '').slice(0, 160) + '\n');
-            }
-          }
-        } catch (e) {}
-        callback(r);
-      };
       try {
         const url = details.url || '';
-        if (!url) { _done({}); return; }
+        if (!url) { callback({}); return; }
 
         // Chromium internal favicon -> transparent 1x1 (matches old behavior).
         if (url.indexOf('faviconv2') !== -1) {
-          _done({ redirectURL: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' });
+          callback({ redirectURL: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' });
           return;
         }
-        if (!/^https?:\/\//i.test(url)) { _done({}); return; }
-        if (this.settings.enabled !== true) { _done({}); return; }
+        if (!/^https?:\/\//i.test(url)) { callback({}); return; }
+        if (this.settings.enabled !== true) { callback({}); return; }
 
         // Main frame = navigation. Reset the per-site counter when the site
         // key changes (fresh page-load stats like Brave). Only the MALICIOUS
@@ -462,13 +428,13 @@ class NeoShields {
               if (res && res.match === true) {
                 const att = this._lastMainFrameSite || site;
                 this._count(att, 'malicious');
-                _done({ cancel: true });
+                callback({ cancel: true });
                 return;
               }
             } catch (e) {}
           }
           this._lastMainFrameSite = site;
-          _done({});
+          callback({});
           return;
         }
 
@@ -482,11 +448,18 @@ class NeoShields {
           } catch (e) {}
         }
         const sourceSite = eTLD1(sourceUrl);
-        if (sourceSite && this.siteOverrides[sourceSite] === false) { _done({}); return; }
+        if (sourceSite && this.siteOverrides[sourceSite] === false) { callback({}); return; }
 
         // Spotify playback-critical hosts always pass (see SPOTIFY_STREAM_HOSTS
         // above) — EasyList breaks ad-supported Spotify otherwise.
-        if (sourceSite && isSpotifyPlaybackHost(url, sourceSite)) { _done({}); return; }
+        if (sourceSite && isSpotifyPlaybackHost(url, sourceSite)) { callback({}); return; }
+
+        // YouTube bypass. Shields leave YouTube fully alone so videos load
+        // and play exactly like shields-off: fast, page intact, nothing
+        // half-blocked. googlevideo.com serves YouTube content exclusively,
+        // so it is always allowed (media segments often carry no referrer).
+        if (sourceSite === 'youtube.com' || sourceSite === 'youtu.be' || sourceSite === 'youtube-nocookie.com') { callback({}); return; }
+        try { if (/\/\/(?:[a-z0-9-]+\.)*googlevideo\.com\//i.test(url)) { callback({}); return; } } catch (e) {}
 
         // Build adblocker Request directly from Electron details.
         let request;
@@ -518,7 +491,7 @@ class NeoShields {
           const frameSite = this._lastMainFrameSite || '';
           const reqSite = eTLD1(url);
           if (frameSite && reqSite && frameSite === reqSite) {
-            _done({});
+            callback({});
             return;
           }
         }
@@ -532,30 +505,16 @@ class NeoShields {
             } catch (e) {}
           }
         }
-        if (!blockedCat) { _done({}); return; }
+        if (!blockedCat) { callback({}); return; }
 
         // Count (per-site + global) with the source site if known, else the
         // request's own host (fallback attribution).
         const attSite = sourceSite || eTLD1(url);
         if (attSite) this._count(attSite, blockedCat);
 
-        try {
-          if (process.env.NEO_SHIELD_TRACE === '1' && url.indexOf('videoplayback') !== -1) {
-            let rule = '';
-            try {
-              const dbg = this.eng[blockedCat] && this.eng[blockedCat].match(request);
-              if (dbg && dbg.filter) rule = 'engine:' + String(dbg.filter).slice(0, 120);
-            } catch (e) {}
-            if (!rule) {
-              try { rule = 'fast:' + (isYouTubeAdDebug(url) || 'unknown'); } catch (e) {}
-            }
-            fs.appendFileSync('C:\\Users\\Admin\\AppData\\Local\\Temp\\opencode\\shield-trace.log',
-              'WHY[' + blockedCat + '] ' + rule + ' :: ' + url + '\n');
-          }
-        } catch (e) {}
-        _done({ cancel: true });
+        callback({ cancel: true });
       } catch (e) {
-        _done({});
+        callback({});
       }
     };
   }
@@ -640,6 +599,12 @@ class NeoShields {
       if (this.settings.categories && this.settings.categories.ads === false) return { css: '', injections: '' };
       const site = eTLD1(url);
       if (site && this.siteOverrides[site] === false) return { css: '', injections: '' };
+      // YouTube bypass (matches the network bypass in makeHandler): no
+      // cosmetic CSS, no scriptlets — the page renders exactly like
+      // shields-off.
+      if (site === 'youtube.com' || site === 'youtube-nocookie.com' || site === 'youtu.be') {
+        return { css: '', injections: '' };
+      }
       const parsed = parseDomain(url);
       let css = '';
       let injections = '';
@@ -658,32 +623,6 @@ class NeoShields {
         const styles = out.styles || '';
         css = typeof styles === 'string' ? styles : (Array.isArray(styles) ? styles.join('\n') : '');
         injections = typeof out.injections === 'string' ? out.injections : (Array.isArray(out.injections) ? out.injections.join('\n') : '');
-      }
-      // YouTube overlay/banner ad containers (the in-stream ad itself is
-      // skipped by isYouTubeAdRequest blocking the ad video segment).
-      if (site === 'youtube.com' || site === 'youtube-nocookie.com' || site === 'youtu.be') {
-        css += '\n.ytp-ad-overlay-container,.ytp-ad-module,.ytp-ad-image-overlay,' +
-                '.ytp-ad-text-overlay,.ytp-ad-progress-list,.ytd-action-companion-ad-renderer,' +
-                'ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-ad-slot-renderer,' +
-                'ytd-promoted-video-renderer,ytd-compact-promoted-video-renderer,' +
-                'ytd-statement-banner-renderer,.ytp-ad-message-container,' +
-                '#player-ads,#masthead-ad,.ytd-banner-promo-renderer{display:none !important;visibility:hidden !important;}';
-        // YouTube video-ad skipper. Some ad creatives no longer carry
-        // network-level markers (same CDN shape as content), so the player
-        // itself is driven: while .ad-showing is on, mute + sprint the ad to
-        // its end and hit Skip the moment it appears; overlay/sponsored units
-        // are re-hidden on every sweep. Idempotent (guard flag) so in-page
-        // navigations that re-inject never stack intervals.
-        injections += '\n;(function(){if(window.__nxYtAdSkip)return;window.__nxYtAdSkip=true;window.__nxYtAdMuted=false;window.__nxYtRate=1;' +
-          'var H=[".ytp-ad-overlay-container",".ytp-ad-text-overlay",".ytp-ad-image-overlay",".ytp-ad-module","#player-ads",".ytd-action-companion-ad-renderer","ytd-display-ad-renderer","ytd-ad-slot-renderer","ytd-promoted-video-renderer","ytd-compact-promoted-video-renderer","ytd-statement-banner-renderer","#masthead-ad",".ytp-ad-message-container"];' +
-          'function sweep(){try{var p=document.querySelector("#movie_player")||document.querySelector(".html5-video-player");' +
-          'var v=document.querySelector("video");var ad=!!(p&&p.classList&&p.classList.contains("ad-showing"));' +
-          'if(v&&ad){try{if(!v.muted){v.muted=true;window.__nxYtAdMuted=true;}window.__nxYtRate=v.playbackRate||1;v.playbackRate=16;' +
-          'var d=v.duration;if(isFinite(d)&&d>0){try{v.currentTime=Math.max(0,d-0.15);}catch(e){}}}catch(e){}' +
-          'var b=document.querySelector(".ytp-skip-ad-button,.ytp-ad-skip-button,.ytp-ad-skip-button-modern");if(b){try{b.click();}catch(e){}}}' +
-          'else if(v&&window.__nxYtAdMuted){try{v.muted=false;v.playbackRate=window.__nxYtRate||1;}catch(e){}window.__nxYtAdMuted=false;}' +
-          'for(var i=0;i<H.length;i++){var els=document.querySelectorAll(H[i]);for(var j=0;j<els.length;j++){try{els[j].style.setProperty("display","none","important");}catch(e){}}}}catch(e){}}' +
-          'setInterval(sweep,500);sweep();})();';
       }
       return { css: css, injections: injections };
     } catch (e) {
