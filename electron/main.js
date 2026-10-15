@@ -2572,22 +2572,32 @@ app.whenReady().then(async () => {
   }
   function _fetchReleaseJson() {
     return new Promise(function(resolve, reject) {
-      try {
-        var req = https.get('https://api.github.com/repos/khanhishan70-stack/browser-AI-3/releases/latest', {
-          headers: { 'User-Agent': 'NEXORA-Browser-Updater', 'Accept': 'application/vnd.github+json' }
-        }, function(res) {
-          var code = res.statusCode || 0;
-          if (code !== 200) { res.resume(); return reject(new Error('HTTP ' + code)); }
-          var buf = '';
-          res.on('data', function(c) { buf += c; });
-          res.on('end', function() {
-            try { resolve(JSON.parse(buf)); } catch(e) { reject(e); }
+      function get(u, redirs) {
+        if (redirs > 6) return reject(new Error('Too many redirects'));
+        try {
+          var req = https.get(u, {
+            headers: { 'User-Agent': 'NEXORA-Browser-Updater', 'Accept': 'application/vnd.github+json' }
+          }, function(res) {
+            var code = res.statusCode || 0;
+            if (code >= 300 && code < 400 && res.headers.location) {
+              res.resume();
+              var next = '';
+              try { next = new URL(res.headers.location, u).toString(); } catch (e) { return reject(e); }
+              return get(next, (redirs || 0) + 1);
+            }
+            if (code !== 200) { res.resume(); return reject(new Error('HTTP ' + code)); }
+            var buf = '';
+            res.on('data', function(c) { buf += c; });
+            res.on('end', function() {
+              try { resolve(JSON.parse(buf)); } catch(e) { reject(e); }
+            });
+            res.on('error', reject);
           });
-          res.on('error', reject);
-        });
-        req.setTimeout(15000, function() { try { req.destroy(new Error('Update check timed out')); } catch(e) {} });
-        req.on('error', reject);
-      } catch(e) { reject(e); }
+          req.setTimeout(15000, function() { try { req.destroy(new Error('Update check timed out')); } catch(e) {} });
+          req.on('error', reject);
+        } catch(e) { reject(e); }
+      }
+      get('https://api.github.com/repos/khanhishan70-stack/NEXORA-Browser/releases/latest', 0);
     });
   }
   function _updateBroadcast(info) {
