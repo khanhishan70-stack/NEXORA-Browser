@@ -2707,46 +2707,32 @@ app.whenReady().then(async () => {
       try { fs.mkdirSync(tmpDir, { recursive: true }); } catch(e) {}
       var zipPath = path.join(tmpDir, String(zip.name));
       await _updateDownloadFile(String(zip.browser_download_url), zipPath, total);
-      // Hidden applier script (paths baked in): NO console window ever. Shows
-      // a small progress pill, extracts long-path-safe, waits for our exit,
+      // Applier script (paths baked in): runs as a small MINIMIZED console
+      // (honest, robust — no hidden-GUI fragility), logs every step to
+      // update-apply.log, extracts long-path-safe, waits for our exit,
       // overlays ONLY the app folder, and relaunches.
       function psQ(s) { return String(s).split("'").join("''"); }
       var psPath = path.join(tmpDir, 'apply-update.ps1');
+      var applyLog = path.join(tmpDir, 'update-apply.log');
       var uzDir = path.join(tmpDir, 'uz');
       var L = [];
-      L.push("Add-Type -AssemblyName System.Windows.Forms");
+      L.push("$ErrorActionPreference = 'Stop'");
       L.push("Add-Type -AssemblyName System.IO.Compression.FileSystem");
       L.push("Add-Type -AssemblyName System.IO.Compression");
-      L.push("$ErrorActionPreference = 'Stop'");
+      L.push("$log = '" + psQ(applyLog) + "'");
+      L.push("function Log($m) { try { Add-Content $log ((Get-Date -Format 'HH:mm:ss') + ' ' + $m) } catch { } }");
+      L.push("function Say($m) { try { Write-Host $m } catch { }; Log($m) }");
+      L.push("function Fail($m) { Say(('FAIL: ' + $m)); Start-Sleep -Seconds 6; exit 1 }");
+      L.push("try { $host.ui.RawUI.WindowTitle = 'NEXORA Update' } catch { }");
+      L.push("Log('applier start')");
       L.push("$zip = '" + psQ(zipPath) + "'");
       L.push("$stage = Join-Path $env:TEMP 'nxu'");
       L.push("$dest = '" + psQ(installDir) + "'");
       L.push("$wantPid = " + process.pid);
-      L.push("function Pump { [Windows.Forms.Application]::DoEvents() }");
-      L.push("$form = New-Object Windows.Forms.Form");
-      L.push("$form.Text = 'NEXORA Update'");
-      L.push("$form.Size = New-Object Drawing.Size(380, 120)");
-      L.push("$form.StartPosition = 'CenterScreen'");
-      L.push("$form.TopMost = $true");
-      L.push("$form.FormBorderStyle = 'FixedDialog'");
-      L.push("$form.MaximizeBox = $false");
-      L.push("$form.MinimizeBox = $false");
-      L.push("$form.ControlBox = $false");
-      L.push("$lbl = New-Object Windows.Forms.Label");
-      L.push("$lbl.Text = 'Updating NEXORA, please wait...'");
-      L.push("$lbl.Dock = 'Fill'");
-      L.push("$lbl.TextAlign = 'MiddleCenter'");
-      L.push("$bar = New-Object Windows.Forms.ProgressBar");
-      L.push("$bar.Style = 'Marquee'");
-      L.push("$bar.Dock = 'Bottom'");
-      L.push("$bar.Height = 18");
-      L.push("$form.Controls.Add($lbl)");
-      L.push("$form.Controls.Add($bar)");
-      L.push("$form.Show() | Out-Null; Pump");
-      L.push("function Fail($m) { $lbl.Text = $m; Pump; Start-Sleep -Seconds 8; $form.Close() }");
       L.push("try {");
       L.push("  if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }");
       L.push("  New-Item -ItemType Directory -Path $stage -Force | Out-Null");
+      L.push("  Say('Extracting update...')");
       L.push("  $fs = [System.IO.File]::OpenRead($zip)");
       L.push("  try {");
       L.push("    $za = New-Object System.IO.Compression.ZipArchive($fs)");
@@ -2758,27 +2744,30 @@ app.whenReady().then(async () => {
       L.push("      if ($e.Name -eq '') { [System.IO.Directory]::CreateDirectory($target) | Out-Null; continue }");
       L.push("      [System.IO.Directory]::CreateDirectory((Split-Path $target)) | Out-Null");
       L.push("      [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $target, $true)");
-      L.push("      $n++; if (($n % 400) -eq 0) { Pump }");
+      L.push("      $n++; if (($n % 800) -eq 0) { Say(('Extracted ' + $n + ' files...')) }");
       L.push("    }");
       L.push("    $za.Dispose()");
       L.push("  } finally { $fs.Dispose() }");
+      L.push("  Say('Verifying files...')");
       L.push("  $c1 = Join-Path $stage 'NEXORA Browser\\NEXORA-win32-x64\\NEXORA.exe'");
       L.push("  $c2 = Join-Path $stage 'NEXORA-win32-x64\\NEXORA.exe'");
       L.push("  if (Test-Path $c1) { $src = Split-Path $c1 } elseif (Test-Path $c2) { $src = Split-Path $c2 } else { $src = $null }");
       L.push("  if (-not $src -or -not (Test-Path (Join-Path $dest 'NEXORA.exe'))) { Fail('Update files look wrong - browser untouched.'); return }");
-      L.push("  $lbl.Text = 'Waiting for NEXORA to close...'; Pump");
+      L.push("  Say('Waiting for NEXORA to close...')");
       L.push("  $tries = 0");
-      L.push("  while ((Get-Process -Id $wantPid -ErrorAction SilentlyContinue) -and ($tries -lt 120)) { Start-Sleep -Milliseconds 500; $tries++; Pump }");
+      L.push("  while ((Get-Process -Id $wantPid -ErrorAction SilentlyContinue) -and ($tries -lt 120)) { Start-Sleep -Milliseconds 500; $tries++; if (($tries % 40) -eq 0) { Log('still waiting...') } }");
+      L.push("  Log('kill leftovers')");
       L.push("  Get-Process NEXORA -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue");
       L.push("  Start-Sleep -Seconds 2");
-      L.push("  $lbl.Text = 'Installing files...'; Pump");
+      L.push("  Log('robocopy start')");
+      L.push("  Say('Installing files...')");
       L.push("  robocopy \"$src\" \"$dest\" /E /R:5 /W:2 /NFL /NDL /NJH /NJS");
       L.push("  if ($LASTEXITCODE -ge 8) { Fail('Files are locked - browser untouched. Close NEXORA fully and retry.'); return }");
-      L.push("  $lbl.Text = 'Starting NEXORA...'; Pump");
+      L.push("  Say('Starting NEXORA...')");
       L.push("  Start-Process (Join-Path $dest 'NEXORA.exe') '--no-sandbox'");
       L.push("  Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue");
       L.push("  Remove-Item -Force $zip -ErrorAction SilentlyContinue");
-      L.push("  $form.Close()");
+      L.push("  Log('applier done')");
       L.push("} catch { Fail('Update failed - your browser is untouched.') }");
       fs.writeFileSync(psPath, L.join('\n'));
       return { ok: true, ps: psPath, version: String((rel && rel.tag_name) || '').replace(/^v/i, '') };
@@ -2787,12 +2776,33 @@ app.whenReady().then(async () => {
   ipcMain.handle('update-restart-apply', async function(event, payload) {
     try {
       var ps = payload && payload.ps;
-      if (!ps || !fs.existsSync(ps)) return { ok: false };
-      var child = spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', ps], { detached: true, stdio: 'ignore', windowsHide: true });
-      try { child.unref(); } catch(e) {}
-      setTimeout(function() { try { app.quit(); } catch(e) {} }, 800);
+      if (!ps || !fs.existsSync(ps)) return { ok: false, error: 'no-script' };
+      var applyLog = path.join(os.tmpdir(), 'nexora-update', 'update-apply.log');
+      var spawnErr = null, exitedCode = null, child = null;
+      // NOTE: intentionally NOT detached and NOT hidden. A console-less
+      // detached powershell dies at startup; with its own (minimized)
+      // console the applier is independent and outlives our quit, which the
+      // overlay requires. unref lets us exit without waiting for it.
+      try {
+        child = spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Minimized', '-ExecutionPolicy', 'Bypass', '-File', ps], { stdio: 'ignore' });
+      } catch (e) { return { ok: false, error: 'spawn: ' + String((e && e.message) || e) }; }
+      child.on('error', function(e) { spawnErr = e; });
+      child.on('exit', function(c) { exitedCode = c; });
+      // Grace period: the applier must still be running (extracting) after a
+      // few seconds. If it died instantly, DO NOT quit the browser — report
+      // the log tail so the failure is visible instead of silent.
+      await new Promise(function(r) { setTimeout(r, 5000); });
+      if (spawnErr || exitedCode !== null) {
+        var tail = '';
+        try { tail = fs.readFileSync(applyLog, 'utf8').split(/\r?\n/).filter(Boolean).slice(-4).join(' | '); } catch (e) {}
+        var msg = spawnErr ? String((spawnErr && spawnErr.message) || spawnErr) : ('applier exited early (code ' + exitedCode + ')');
+        if (tail) msg += ' :: ' + tail;
+        return { ok: false, error: msg };
+      }
+      try { child.unref(); } catch (e) {}
+      setTimeout(function() { try { app.quit(); } catch (e) {} }, 800);
       return { ok: true };
-    } catch(e) { return { ok: false }; }
+    } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
   });
 
   // Renderer answers the prompt bubble / picker, or manages site settings.
