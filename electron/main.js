@@ -2676,8 +2676,19 @@ app.whenReady().then(async () => {
             out.close(function() {
               prog();
               if (!got) { try { fs.unlinkSync(tmp); } catch(e) {} return reject(new Error('Empty response')); }
-              try { fs.renameSync(tmp, dest); } catch(e) { return reject(e); }
-              resolve(dest);
+              // Rename retry: antivirus/file-indexer often holds the fresh
+              // 300MB+ file for a moment, failing the first rename with
+              // ENOENT. Back off and retry instead of failing the download.
+              var tries = 0;
+              (function doRename() {
+                try { fs.renameSync(tmp, dest); }
+                catch (e) {
+                  tries++;
+                  if (tries < 5) { setTimeout(doRename, 1500 * tries); return; }
+                  return reject(e);
+                }
+                resolve(dest);
+              })();
             });
           });
           res.on('error', reject);
