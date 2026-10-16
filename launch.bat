@@ -10,6 +10,19 @@ REM  Later runs: setup is skipped, browser launches straight away.
 REM  (After setup you can also just double-click NEXORA.exe.)
 REM ============================================================
 
+REM ---- Already open? Never start a second copy (two copies fight over the
+REM AI backend and flash consoles in a loop). Windowless leftovers are
+REM cleared so a fresh launch always starts clean.
+tasklist /V /FI "IMAGENAME eq NEXORA.exe" 2>nul | findstr /c:"NEXORA Browser" >nul
+if %ERRORLEVEL% EQU 0 (
+  echo NEXORA Browser is already running - use the open window.
+  echo If you see no window, end NEXORA in Task Manager and run this again.
+  endlocal
+  goto :eof
+)
+taskkill /F /IM NEXORA.exe >nul 2>&1
+taskkill /F /IM electron.exe >nul 2>&1
+
 REM ---- Carry over an old install's data (new folder, first run only) ----
 if exist "ai UI DESIGN\backend\.env" goto migrate_done
 if exist "ai UI DESIGN\backend\neo_accounts" goto migrate_done

@@ -286,6 +286,34 @@ function startOllama() {
   });
 }
 
+// Synchronous backend health probe (curl ships with Windows 10 1803+; if it
+// is missing we treat the backend as down and fall back to a fresh spawn).
+function _backendAliveSync() {
+  try {
+    var o = require('child_process').execFileSync('curl.exe', ['-s', '-m', '3', 'http://127.0.0.1:' + BACKEND_PORT + '/api/health'], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+    return !!o && o.indexOf('"status"') !== -1;
+  } catch (e) { return false; }
+}
+// Keeps an adopted (not child-owned) backend supervised: if it ever stops
+// answering, fall back to a fresh owned backend. No-op while quitting.
+let _backendPoller = null;
+function _backendEnsurePoller() {
+  if (_backendPoller) return;
+  try {
+    _backendPoller = setInterval(() => {
+      try {
+        if (_backendQuitting) return;
+        if (backendProcess) return;
+        if (!_backendAliveSync() && !_backendQuitting) {
+          console.log('[Backend] Adopted backend went away - starting fresh.');
+          startBackend();
+        }
+      } catch (e) {}
+    }, 30000);
+    if (_backendPoller.unref) _backendPoller.unref();
+  } catch (e) {}
+}
+
 function startBackend() {
   return new Promise((resolve) => {
     if (process.env.NEO_NO_BACKEND === '1') {
@@ -293,6 +321,19 @@ function startBackend() {
       resolve();
       return;
     }
+    // Adopt, don't fight: if a HEALTHY backend already answers (left running
+    // by another copy, or a previous session), use it instead of killing it
+    // and spawning our own. Two copies killing each other's backends is what
+    // caused flashing-console restart loops. Falls through to a fresh spawn
+    // when nothing healthy answers.
+    try {
+      if (_backendAliveSync()) {
+        console.log('[Backend] Healthy backend already running - adopting it.');
+        _backendEnsurePoller();
+        resolve();
+        return;
+      }
+    } catch (e) {}
     // Keep the offline AI warm in parallel — backend health poll gives it time to boot.
     startOllama();
     // Find Python in the venv
@@ -402,6 +443,7 @@ function startBackend() {
 
 function stopBackend() {
   _backendQuitting = true;
+  try { if (_backendPoller) { clearInterval(_backendPoller); _backendPoller = null; } } catch (e) {}
   if (backendProcess) {
     console.log('[Backend] Stopping...');
     try { backendProcess.kill('SIGTERM'); } catch {}
