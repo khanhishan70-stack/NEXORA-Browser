@@ -14,7 +14,7 @@ window.NEXORA_SITE = {
   // extract, open "NEXORA Browser", run launch.bat (or NEXORA.exe).
   windowsInstallerUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest/download/NEXORA-Browser-Windows-x64.zip",
 
-  releaseInfo: { version: "1.1.9", date: "2026-10-16", size: "338 MB", arch: "Windows x64" },
+  releaseInfo: { version: "1.2.0", date: "2026-10-17", size: "338 MB", arch: "Windows x64" },
 
   // Contact for security reports, when available.
   securityContact: "",
