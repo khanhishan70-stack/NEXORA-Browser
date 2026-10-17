@@ -15,6 +15,11 @@
   <link rel="preconnect" href="https://www.stackoverflow.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script src="vendor/pdf.min.js"></script>
+  <script>
+    (function() { try { if (window.pdfjsLib) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js'; } } catch (e) {} })();
+  </script>
   <script src="node_modules/marked/marked.min.js"></script>
   <script src="node_modules/dompurify/dist/purify.min.js"></script>
   <link rel="stylesheet" href="vendor/github-dark.min.css" />
@@ -6998,6 +7003,89 @@
     .pdf-back-btn { display: none; }
     .pdf-back-btn:hover { background: rgba(0,255,249,0.08); color: #00fff9; }
 
+    /* ===== pic2pdf — PDF Workbench (Acrobat-style PDF editor) ===== */
+    .pdf-drop-actions { display: flex; gap: 10px; margin-top: 6px; }
+    .pdf-dropzone .pdf-browse-alt { background: transparent; border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.8); }
+    .pdf-dropzone .pdf-browse-alt:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.32); }
+    #pdfPage.wb-mode .pdf-dropzone,
+    #pdfPage.wb-mode .pdf-editor,
+    #pdfPage.wb-mode .pdf-bottom-bar { display: none !important; }
+    .pdf-wb { flex: 1; display: none; flex-direction: column; overflow: hidden; position: relative; }
+    #pdfPage.wb-mode .pdf-wb { display: flex; }
+    .pdf-wb-bar {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 7px 14px; background: #2c2c30;
+      border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+    }
+    .pdf-wb-bar .wb-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.1);
+      background: transparent; color: rgba(255,255,255,0.75);
+      font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer; transition: 0.12s;
+      white-space: nowrap;
+    }
+    .pdf-wb-bar .wb-btn:hover:not(:disabled) { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.2); }
+    .pdf-wb-bar .wb-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .pdf-wb-bar .wb-btn.wb-primary { background: #1473e6; border-color: #1473e6; color: #fff; }
+    .pdf-wb-bar .wb-btn.wb-primary:hover:not(:disabled) { background: #1a7cf0; }
+    .pdf-wb-bar .wb-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 2px; }
+    .pdf-wb-bar .wb-grow { flex: 1; }
+    .pdf-wb-bar .wb-info { font-size: 12px; color: rgba(255,255,255,0.45); white-space: nowrap; }
+    .pdf-wb-grid {
+      flex: 1; overflow-y: auto; padding: 18px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 16px; align-content: start; background: #151518;
+    }
+    .pdf-wb-page {
+      position: relative; background: #fff; border-radius: 6px;
+      border: 2px solid transparent; cursor: pointer; transition: 0.1s;
+      display: flex; flex-direction: column; align-items: center; overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35); min-height: 120px;
+    }
+    .pdf-wb-page.active { border-color: #1473e6; box-shadow: 0 0 0 1px #1473e6, 0 4px 14px rgba(20,115,230,0.4); }
+    .pdf-wb-page canvas { width: 100%; height: auto; display: block; background: #fff; }
+    .pdf-wb-page img { width: 100%; height: auto; display: block; background: #fff; }
+    .pdf-wb-page .wb-page-ph { width: 100%; min-height: 120px; display: flex; align-items: center; justify-content: center; color: #b9b9b9; font-size: 13px; }
+    .pdf-wb-page .wb-page-num {
+      position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.7);
+      color: #fff; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
+    }
+    .pdf-wb-page .wb-page-rot {
+      position: absolute; top: 4px; right: 4px; background: rgba(20,115,230,0.85);
+      color: #fff; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
+    }
+    .pdf-wb-page .wb-page-src {
+      position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.55); color: #ddd;
+      font-size: 9px; padding: 1px 5px; border-radius: 3px; max-width: 62%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pdf-wb-empty { color: rgba(255,255,255,0.3); font-size: 13px; padding: 40px; text-align: center; grid-column: 1 / -1; }
+    .pdf-wb-modal {
+      position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.55); backdrop-filter: blur(2px);
+    }
+    .pdf-wb-modal-box {
+      width: min(420px, 90%); background: #2c2c30; border-radius: 10px; padding: 18px 18px 14px;
+      border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    }
+    .pdf-wb-modal-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 12px; }
+    .pdf-wb-modal-body { display: flex; flex-direction: column; gap: 10px; }
+    .pdf-wb-modal .wb-field { display: flex; flex-direction: column; gap: 4px; }
+    .pdf-wb-modal .wb-field span { font-size: 11px; color: rgba(255,255,255,0.45); }
+    .pdf-wb-modal .wb-field input {
+      padding: 7px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);
+      background: #1e1e22; color: #fff; font-size: 13px; font-family: inherit; outline: none;
+    }
+    .pdf-wb-modal .wb-field input:focus { border-color: rgba(20,115,230,0.6); }
+    .pdf-wb-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .pdf-wb-toast {
+      position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+      background: rgba(20,115,230,0.95); color: #fff; font-size: 12px; font-weight: 600;
+      padding: 8px 16px; border-radius: 6px; z-index: 45; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none;
+    }
+    .pdf-wb-toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
     /* ===== AI RESULTS PAGE ===== */
     #resultsPage {
       position: absolute;
@@ -13777,11 +13865,15 @@
           <div class="pdf-icon-big">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
           </div>
-          <h2>Create a PDF from images</h2>
-          <div class="pdf-sub">Drag &amp; drop images here, or click Browse</div>
-          <div class="pdf-sub" style="font-size:11px;color:rgba(255,255,255,0.2)">JPG, PNG, GIF, WebP &mdash; all processing is local</div>
-          <button class="pdf-browse-btn" id="pdfBrowseBtn">Browse Files</button>
+          <h2>Create or edit PDFs</h2>
+          <div class="pdf-sub">Drag &amp; drop images or a PDF here</div>
+          <div class="pdf-sub" style="font-size:11px;color:rgba(255,255,255,0.2)">Images &rarr; PDF &nbsp;&middot;&nbsp; merge, split, rotate, delete pages &nbsp;&middot;&nbsp; everything stays local</div>
+          <div class="pdf-drop-actions">
+            <button class="pdf-browse-btn" id="pdfBrowseBtn">Browse Images</button>
+            <button class="pdf-browse-btn pdf-browse-alt" id="pdfOpenPdfBtn">Open PDF</button>
+          </div>
         </div>
+        <input type="file" id="pdfDocInput" accept="application/pdf,.pdf" multiple hidden />
         <div class="pdf-editor" id="pdfEditor">
           <!-- Left: page thumbnails (Acrobat page panel) -->
           <div class="pdf-pages-panel">
@@ -13857,6 +13949,44 @@
                 <div class="ts-color-swatch" data-bg="#e6c214" style="background:#e6c214"></div>
                 <div class="ts-color-swatch" data-bg="#a014e6" style="background:#a014e6"></div>
                 <div class="ts-color-swatch" data-bg="#ff6b35" style="background:#ff6b35"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- ===== PDF Workbench (real PDF editing) ===== -->
+        <div class="pdf-wb" id="pdfWb">
+          <div class="pdf-wb-bar">
+            <button class="wb-btn" id="wbAddBtn" title="Add another PDF (merge)">+ Add PDF</button>
+            <span class="wb-sep"></span>
+            <button class="wb-btn" id="wbRotLBtn" title="Rotate selected left 90&deg;">&#8630; Rotate</button>
+            <button class="wb-btn" id="wbRotRBtn" title="Rotate selected right 90&deg;">Rotate &#8631;</button>
+            <button class="wb-btn" id="wbMoveLBtn" title="Move selected earlier">&#8592; Move</button>
+            <button class="wb-btn" id="wbMoveRBtn" title="Move selected later">Move &#8594;</button>
+            <button class="wb-btn" id="wbBlankBtn" title="Insert a blank page after the selection">+ Blank</button>
+            <button class="wb-btn" id="wbDelBtn" title="Delete selected pages">Delete</button>
+            <button class="wb-btn" id="wbExtractBtn" title="Extract selected pages into a new PDF">Extract</button>
+            <span class="wb-sep"></span>
+            <button class="wb-btn" id="wbNumBtn" title="Add page numbers">Numbers</button>
+            <button class="wb-btn" id="wbWaterBtn" title="Add a watermark">Watermark</button>
+            <button class="wb-btn" id="wbMetaBtn" title="Document properties">Properties</button>
+            <button class="wb-btn" id="wbSplitBtn" title="Split into several PDFs">Split</button>
+            <span class="wb-grow"></span>
+            <span class="wb-info" id="wbInfo">0 pages</span>
+            <button class="wb-btn" id="wbAllBtn" title="Select all pages">All</button>
+            <button class="wb-btn" id="wbNoneBtn" title="Clear selection">None</button>
+            <span class="wb-sep"></span>
+            <button class="wb-btn wb-primary" id="wbSaveBtn" title="Save the edited PDF">Save PDF</button>
+            <button class="wb-btn" id="wbExitBtn" title="Close the PDF editor">Close</button>
+          </div>
+          <div class="pdf-wb-grid" id="wbGrid"></div>
+          <div class="pdf-wb-toast" id="wbToast"></div>
+          <div class="pdf-wb-modal" id="wbModal" style="display:none">
+            <div class="pdf-wb-modal-box">
+              <div class="pdf-wb-modal-title" id="wbModalTitle">Title</div>
+              <div class="pdf-wb-modal-body" id="wbModalBody"></div>
+              <div class="pdf-wb-modal-actions">
+                <button class="wb-btn" id="wbModalCancel">Cancel</button>
+                <button class="wb-btn wb-primary" id="wbModalOk">OK</button>
               </div>
             </div>
           </div>
@@ -25700,7 +25830,16 @@
   pdfEl.dz.addEventListener('dragover', function(e) { e.preventDefault(); this.style.borderColor = 'rgba(20,115,230,0.5)'; });
   pdfEl.dz.addEventListener('dragleave', function() { this.style.borderColor = 'rgba(255,255,255,0.07)'; });
   pdfEl.dz.addEventListener('drop', function(e) {
-    e.preventDefault(); this.style.borderColor = 'rgba(255,255,255,0.07)'; addFilesToPdf(e.dataTransfer.files);
+    e.preventDefault(); this.style.borderColor = 'rgba(255,255,255,0.07)';
+    var list = e.dataTransfer.files || [];
+    var pdfs = [], imgs = [];
+    for (var i = 0; i < list.length; i++) {
+      var nm = (list[i].name || '').toLowerCase();
+      if (list[i].type === 'application/pdf' || /\.pdf$/.test(nm)) pdfs.push(list[i]);
+      else imgs.push(list[i]);
+    }
+    if (imgs.length) addFilesToPdf(imgs);
+    if (pdfs.length) wbAddFiles(pdfs);
   });
 
   document.getElementById('pdfUndoBtn').addEventListener('click', _pdfUndo);
@@ -26107,6 +26246,481 @@
       addTab('browser://pdf', 'pic2pdf');
     }
   });
+
+  // ===== PDF WORKBENCH =====
+  // Real PDF editing (merge, split, extract, rotate, delete, reorder, blank
+  // pages, page numbers, watermark, properties) via pdf-lib + pdf.js.
+  // Everything runs locally; no file ever leaves the machine.
+  var _wbPages = [];
+  var _wbSources = [];
+  var _wbSel = new Set();
+  var _wbAnchor = -1;
+  var _wbOpts = { numbers: null, watermark: null, meta: null };
+  var _wbModalResolve = null;
+  var _wbToastTimer = null;
+  var _wbThumbQueue = [];
+  var _wbThumbBusy = false;
+
+  function _wbLib() { return window.PDFLib; }
+  function _wbPj() { return window.pdfjsLib; }
+  function _wbReady() { return !!(window.PDFLib && window.pdfjsLib); }
+  function _wbEl(id) { return document.getElementById(id); }
+  function _wbUid() { return 'src' + Math.random().toString(36).slice(2, 9); }
+  function _wbSortedSel() { return Array.from(_wbSel).sort(function(a, b) { return a - b; }); }
+  function _wbEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function _wbBaseName() {
+    var n = (_wbSources[0] && _wbSources[0].name) ? _wbSources[0].name : 'document';
+    n = n.replace(/\.pdf$/i, '');
+    return _wbSources.length > 1 ? n + '-merged' : n;
+  }
+  function _wbShow() { var p = _wbEl('pdfPage'); if (p) p.classList.add('wb-mode'); }
+  function _wbHide() { var p = _wbEl('pdfPage'); if (p) p.classList.remove('wb-mode'); }
+
+  function wbToast(msg) {
+    var t = _wbEl('wbToast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(_wbToastTimer);
+    _wbToastTimer = setTimeout(function() { t.classList.remove('show'); }, 2800);
+  }
+
+  async function wbAddFiles(files) {
+    files = files || [];
+    if (!_wbReady()) { alert('PDF tools are unavailable (a library failed to load).'); return 0; }
+    var added = 0;
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      var nm = (f.name || '').toLowerCase();
+      if (f.type !== 'application/pdf' && !/\.pdf$/.test(nm)) continue;
+      try {
+        var buf = await f.arrayBuffer();
+        await _wbAddSource(f.name || 'document.pdf', new Uint8Array(buf));
+        added++;
+      } catch (e) {
+        console.error('PDF load failed', e);
+        alert('Could not open "' + (f.name || 'file') + '".\n' + (e && e.message ? e.message : e));
+      }
+    }
+    if (added) { _wbShow(); await _wbRenderGrid(); }
+    return added;
+  }
+
+  async function _wbAddSource(name, bytes) {
+    var PL = _wbLib();
+    var lib = await PL.PDFDocument.load(bytes.slice(0), { ignoreEncryption: true, updateMetadata: false });
+    var js = await _wbPj().getDocument({ data: bytes.slice(0), isEvalSupported: false }).promise;
+    var src = { id: _wbUid(), name: name, lib: lib, js: js, bytes: bytes };
+    _wbSources.push(src);
+    var n = lib.getPageCount();
+    for (var p = 0; p < n; p++) {
+      var sz = { width: 595, height: 842 };
+      try { var g = lib.getPage(p).getSize(); sz = { width: g.width, height: g.height }; } catch (e) {}
+      _wbPages.push({ type: 'src', src: src, pageIndex: p, rot: 0, thumb: null, thumbRot: 0, w: sz.width, h: sz.height });
+    }
+    return src;
+  }
+
+  async function _wbRenderThumb(d) {
+    if (!d) return;
+    if (d.type === 'blank') { d.thumb = null; d.thumbRot = d.rot; return; }
+    try {
+      var page = await d.src.js.getPage(d.pageIndex + 1);
+      var rot = ((((page.rotate || 0) + (d.rot || 0)) % 360) + 360) % 360;
+      var v0 = page.getViewport({ scale: 1, rotation: rot });
+      var scale = Math.min(220 / v0.width, 300 / v0.height);
+      if (!isFinite(scale) || scale <= 0) scale = 0.3;
+      var vp = page.getViewport({ scale: scale, rotation: rot });
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.ceil(vp.width));
+      canvas.height = Math.max(1, Math.ceil(vp.height));
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      d.thumb = canvas.toDataURL('image/jpeg', 0.72);
+    } catch (e) { d.thumb = null; }
+    d.thumbRot = d.rot;
+  }
+
+  function _wbQueueThumbs() {
+    _wbThumbQueue = [];
+    for (var i = 0; i < _wbPages.length; i++) {
+      var d = _wbPages[i];
+      if (d.type !== 'blank' && (!d.thumb || d.thumbRot !== d.rot)) _wbThumbQueue.push(d);
+    }
+    _wbPumpThumbs();
+  }
+  async function _wbPumpThumbs() {
+    if (_wbThumbBusy) return;
+    _wbThumbBusy = true;
+    while (_wbThumbQueue.length) {
+      var d = _wbThumbQueue.shift();
+      await _wbRenderThumb(d);
+      var idx = _wbPages.indexOf(d);
+      if (idx >= 0) _wbUpdateThumbDom(idx, d);
+    }
+    _wbThumbBusy = false;
+  }
+  function _wbUpdateThumbDom(idx, d) {
+    var grid = _wbEl('wbGrid');
+    if (!grid) return;
+    var el = grid.querySelector('.pdf-wb-page[data-idx="' + idx + '"]');
+    if (!el) return;
+    var holder = el.querySelector('.wb-thumb-holder');
+    if (!holder) return;
+    holder.innerHTML = d.thumb ? '<img src="' + d.thumb + '" draggable="false">' : '<div class="wb-page-ph">page</div>';
+  }
+
+  function _wbUpdateInfo() {
+    var info = _wbEl('wbInfo');
+    if (info) info.textContent = _wbPages.length + (_wbPages.length === 1 ? ' page' : ' pages') + '  \u00b7  ' + _wbSel.size + ' selected';
+    var has = _wbPages.length > 0;
+    var save = _wbEl('wbSaveBtn'); if (save) save.disabled = !has;
+    ['wbRotLBtn', 'wbRotRBtn', 'wbDelBtn', 'wbExtractBtn', 'wbMoveLBtn', 'wbMoveRBtn'].forEach(function(id) {
+      var b = _wbEl(id); if (b) b.disabled = _wbSel.size === 0;
+    });
+    var sl = _wbEl('wbSplitBtn'); if (sl) sl.disabled = !has;
+  }
+
+  function _wbRefreshSel() {
+    var grid = _wbEl('wbGrid');
+    if (!grid) return;
+    Array.prototype.forEach.call(grid.children, function(el) {
+      if (el.dataset && el.dataset.idx != null) el.classList.toggle('active', _wbSel.has(parseInt(el.dataset.idx, 10)));
+    });
+    _wbUpdateInfo();
+  }
+
+  async function _wbRenderGrid() {
+    var grid = _wbEl('wbGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    if (!_wbPages.length) {
+      var em = document.createElement('div');
+      em.className = 'pdf-wb-empty';
+      em.textContent = 'No PDF loaded. Use "+ Add PDF" or drop a PDF file here.';
+      grid.appendChild(em);
+      _wbUpdateInfo();
+      return;
+    }
+    _wbPages.forEach(function(d, i) {
+      var el = document.createElement('div');
+      el.className = 'pdf-wb-page' + (_wbSel.has(i) ? ' active' : '');
+      el.dataset.idx = i;
+      var rotDeg = (((d.rot || 0) % 360) + 360) % 360;
+      var inner = '<div class="wb-thumb-holder">' + (d.type === 'blank'
+        ? '<div class="wb-page-ph">blank</div>'
+        : (d.thumb ? '<img src="' + d.thumb + '" draggable="false">' : '<div class="wb-page-ph">loading...</div>')) + '</div>';
+      inner += '<div class="wb-page-num">' + (i + 1) + '</div>';
+      if (rotDeg) inner += '<div class="wb-page-rot">' + rotDeg + '&deg;</div>';
+      if (d.type !== 'blank' && d.src) inner += '<div class="wb-page-src" title="' + _wbEsc(d.src.name) + '">' + _wbEsc(d.src.name) + '</div>';
+      el.innerHTML = inner;
+      grid.appendChild(el);
+    });
+    _wbUpdateInfo();
+    _wbQueueThumbs();
+  }
+
+  async function wbRotate(delta) {
+    var sel = _wbSortedSel();
+    if (!sel.length) return;
+    sel.forEach(function(i) { var d = _wbPages[i]; d.rot = ((((d.rot || 0) + delta) % 360) + 360) % 360; d.thumb = null; });
+    await _wbRenderGrid();
+  }
+
+  async function wbDelete() {
+    var sel = _wbSortedSel();
+    if (!sel.length) return;
+    var set = new Set(sel);
+    _wbPages = _wbPages.filter(function(d, i) { return !set.has(i); });
+    _wbSel.clear(); _wbAnchor = -1;
+    await _wbRenderGrid();
+  }
+
+  async function wbMove(dir) {
+    var sel = _wbSortedSel();
+    if (!sel.length) return;
+    if (dir < 0) {
+      for (var k = 0; k < sel.length; k++) {
+        var i = sel[k];
+        if (i > 0 && !_wbSel.has(i - 1)) {
+          var t1 = _wbPages[i - 1]; _wbPages[i - 1] = _wbPages[i]; _wbPages[i] = t1;
+          _wbSel.delete(i); _wbSel.add(i - 1);
+        }
+      }
+    } else {
+      for (var k2 = sel.length - 1; k2 >= 0; k2--) {
+        var j = sel[k2];
+        if (j < _wbPages.length - 1 && !_wbSel.has(j + 1)) {
+          var t2 = _wbPages[j + 1]; _wbPages[j + 1] = _wbPages[j]; _wbPages[j] = t2;
+          _wbSel.delete(j); _wbSel.add(j + 1);
+        }
+      }
+    }
+    await _wbRenderGrid();
+  }
+
+  async function wbInsertBlank() {
+    var sel = _wbSortedSel();
+    var idx = sel.length ? sel[sel.length - 1] + 1 : _wbPages.length;
+    var ref = sel.length ? _wbPages[sel[0]] : _wbPages[_wbPages.length - 1];
+    var w = ref && ref.w ? ref.w : 595;
+    var h = ref && ref.h ? ref.h : 842;
+    _wbPages.splice(idx, 0, { type: 'blank', rot: 0, thumb: null, thumbRot: 0, w: w, h: h });
+    _wbSel.clear(); _wbSel.add(idx); _wbAnchor = idx;
+    await _wbRenderGrid();
+  }
+
+  async function _wbBuild(descs, applyOpts) {
+    var PL = _wbLib();
+    var out = await PL.PDFDocument.create();
+    for (var i = 0; i < descs.length; i++) {
+      var d = descs[i];
+      if (d.type === 'blank') { out.addPage([d.w || 595, d.h || 842]); continue; }
+      try {
+        var copied = await out.copyPages(d.src.lib, [d.pageIndex]);
+        var page = copied[0];
+        var orig = 0;
+        try { orig = page.getRotation().angle || 0; } catch (e) {}
+        var total = (((orig + (d.rot || 0)) % 360) + 360) % 360;
+        if (total) page.setRotation(PL.degrees(total));
+        out.addPage(page);
+      } catch (e) { console.warn('Skipping a page during save:', e); }
+    }
+    if (applyOpts) {
+      var font = null;
+      try { font = await out.embedFont(PL.StandardFonts.Helvetica); } catch (e) {}
+      var pages = out.getPages();
+      if (_wbOpts.meta) {
+        try {
+          if (_wbOpts.meta.title) out.setTitle(String(_wbOpts.meta.title));
+          if (_wbOpts.meta.author) out.setAuthor(String(_wbOpts.meta.author));
+          if (_wbOpts.meta.subject) out.setSubject(String(_wbOpts.meta.subject));
+          if (_wbOpts.meta.keywords) out.setKeywords(String(_wbOpts.meta.keywords).split(',').map(function(s) { return s.trim(); }).filter(Boolean));
+        } catch (e) {}
+      }
+      if (font && _wbOpts.numbers) {
+        var o = _wbOpts.numbers;
+        pages.forEach(function(pg, idx) {
+          var num = (parseInt(o.start, 10) || 1) + idx;
+          var label = String(o.format || '{n}').replace('{n}', num).replace('{total}', pages.length);
+          try {
+            var size = 11;
+            var tw = font.widthOfTextAtSize(label, size);
+            pg.drawText(label, { x: (pg.getWidth() - tw) / 2, y: 18, size: size, font: font, color: PL.rgb(0.15, 0.15, 0.15) });
+          } catch (e) {}
+        });
+      }
+      if (font && _wbOpts.watermark && _wbOpts.watermark.text) {
+        var wm = _wbOpts.watermark;
+        pages.forEach(function(pg) {
+          try {
+            var w = pg.getWidth(), h = pg.getHeight();
+            var size = wm.size || 46;
+            var tw = font.widthOfTextAtSize(wm.text, size);
+            var rad = (wm.angle || 45) * Math.PI / 180;
+            var tx = w / 2 - Math.cos(rad) * tw / 2 + Math.sin(rad) * size * 0.35;
+            var ty = h / 2 - Math.sin(rad) * tw / 2 - Math.cos(rad) * size * 0.35;
+            pg.drawText(wm.text, { x: tx, y: ty, size: size, font: font, color: PL.rgb(0.5, 0.5, 0.5), rotate: PL.degrees(wm.angle || 45), opacity: wm.opacity != null ? wm.opacity : 0.25 });
+          } catch (e) {}
+        });
+      }
+    }
+    return await out.save({ useObjectStreams: true });
+  }
+
+  function _wbDownload(bytes, name) {
+    var blob = new Blob([bytes], { type: 'application/pdf' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
+
+  async function wbSave() {
+    if (!_wbPages.length) return;
+    var btn = _wbEl('wbSaveBtn');
+    var old = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    try {
+      var bytes = await _wbBuild(_wbPages, true);
+      _wbDownload(bytes, _wbBaseName() + '.pdf');
+      wbToast('Saved ' + _wbPages.length + ' pages');
+    } catch (e) {
+      alert('Could not save PDF: ' + (e && e.message ? e.message : e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = old || 'Save PDF'; }
+    }
+  }
+
+  async function wbExtract() {
+    var sel = _wbSortedSel();
+    if (!sel.length) return;
+    try {
+      var bytes = await _wbBuild(sel.map(function(i) { return _wbPages[i]; }), false);
+      _wbDownload(bytes, _wbBaseName() + '-extract.pdf');
+      wbToast('Extracted ' + sel.length + ' pages');
+    } catch (e) { alert('Extract failed: ' + (e && e.message ? e.message : e)); }
+  }
+
+  async function wbSplit() {
+    if (!_wbPages.length) return;
+    var v = await _wbPrompt('Split PDF', [{ key: 'n', label: 'Pages per file', type: 'number', value: '1' }]);
+    if (!v) return;
+    var n = parseInt(v.n, 10);
+    if (!(n > 0)) n = 1;
+    try {
+      var total = _wbPages.length, part = 1;
+      for (var start = 0; start < total; start += n) {
+        var bytes = await _wbBuild(_wbPages.slice(start, start + n), true);
+        _wbDownload(bytes, _wbBaseName() + '-part' + part + '.pdf');
+        part++;
+        await new Promise(function(r) { setTimeout(r, 400); });
+      }
+      wbToast('Split into ' + (part - 1) + ' files');
+    } catch (e) { alert('Split failed: ' + (e && e.message ? e.message : e)); }
+  }
+
+  async function wbPageNumbers() {
+    var v = await _wbPrompt('Add page numbers', [
+      { key: 'format', label: 'Format  ({n} = number, {total} = count)', type: 'text', value: 'Page {n} of {total}' },
+      { key: 'start', label: 'Start at number', type: 'number', value: '1' }
+    ]);
+    if (!v) return;
+    _wbOpts.numbers = { format: v.format || '{n}', start: v.start || '1' };
+    wbToast('Page numbers will be added when you Save');
+  }
+
+  async function wbWatermark() {
+    var v = await _wbPrompt('Watermark', [
+      { key: 'text', label: 'Text', type: 'text', value: 'CONFIDENTIAL' },
+      { key: 'size', label: 'Font size', type: 'number', value: '46' },
+      { key: 'angle', label: 'Angle (degrees)', type: 'number', value: '45' },
+      { key: 'opacity', label: 'Opacity (0-1)', type: 'number', value: '0.25' }
+    ]);
+    if (!v) return;
+    var op = parseFloat(v.opacity); if (isNaN(op)) op = 0.25;
+    _wbOpts.watermark = { text: v.text || '', size: parseFloat(v.size) || 46, angle: parseFloat(v.angle) || 45, opacity: Math.max(0, Math.min(1, op)) };
+    wbToast('Watermark will be added when you Save');
+  }
+
+  async function wbProperties() {
+    var md = { title: '', author: '', subject: '', keywords: '' };
+    try {
+      if (_wbSources[0]) {
+        md.title = _wbSources[0].lib.getTitle() || '';
+        md.author = _wbSources[0].lib.getAuthor() || '';
+        md.subject = _wbSources[0].lib.getSubject() || '';
+        md.keywords = (_wbSources[0].lib.getKeywords() || '');
+      }
+    } catch (e) {}
+    var v = await _wbPrompt('Document properties', [
+      { key: 'title', label: 'Title', type: 'text', value: md.title },
+      { key: 'author', label: 'Author', type: 'text', value: md.author },
+      { key: 'subject', label: 'Subject', type: 'text', value: md.subject },
+      { key: 'keywords', label: 'Keywords (comma separated)', type: 'text', value: md.keywords }
+    ]);
+    if (!v) return;
+    _wbOpts.meta = v;
+    wbToast('Properties will be applied when you Save');
+  }
+
+  function _wbPrompt(title, fields) {
+    return new Promise(function(resolve) {
+      var modal = _wbEl('wbModal');
+      if (!modal) { resolve(null); return; }
+      _wbEl('wbModalTitle').textContent = title;
+      var body = _wbEl('wbModalBody');
+      body.innerHTML = '';
+      fields.forEach(function(f) {
+        var row = document.createElement('label');
+        row.className = 'wb-field';
+        var span = document.createElement('span');
+        span.textContent = f.label;
+        var inp = document.createElement('input');
+        inp.type = f.type === 'number' ? 'number' : 'text';
+        if (f.type === 'number') inp.step = 'any';
+        inp.value = f.value != null ? f.value : '';
+        row.appendChild(span);
+        row.appendChild(inp);
+        body.appendChild(row);
+      });
+      modal.style.display = 'flex';
+      var inputs = body.querySelectorAll('input');
+      setTimeout(function() { try { if (inputs[0]) inputs[0].focus(); } catch (e) {} }, 30);
+      _wbModalResolve = function(ok) {
+        modal.style.display = 'none';
+        _wbModalResolve = null;
+        if (!ok) { resolve(null); return; }
+        var vals = {};
+        fields.forEach(function(f, i) { vals[f.key] = inputs[i] ? inputs[i].value : ''; });
+        resolve(vals);
+      };
+      function onKey(e) {
+        if (e.key === 'Enter') { e.preventDefault(); if (_wbModalResolve) _wbModalResolve(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); if (_wbModalResolve) _wbModalResolve(false); }
+      }
+      inputs.forEach(function(inp) { inp.addEventListener('keydown', onKey); });
+    });
+  }
+
+  (function wbWire() {
+    var grid = _wbEl('wbGrid');
+    if (!grid) return;
+    grid.addEventListener('click', function(e) {
+      var el = e.target.closest ? e.target.closest('.pdf-wb-page') : null;
+      if (!el) return;
+      var i = parseInt(el.dataset.idx, 10);
+      if (e.shiftKey && _wbAnchor >= 0) {
+        var a = Math.min(_wbAnchor, i), b = Math.max(_wbAnchor, i);
+        _wbSel.clear();
+        for (var k = a; k <= b; k++) _wbSel.add(k);
+      } else if (e.ctrlKey || e.metaKey) {
+        if (_wbSel.has(i)) _wbSel.delete(i); else _wbSel.add(i);
+        _wbAnchor = i;
+      } else {
+        _wbSel.clear(); _wbSel.add(i); _wbAnchor = i;
+      }
+      _wbRefreshSel();
+    });
+    function bind(id, fn) { var b = _wbEl(id); if (b) b.addEventListener('click', fn); }
+    bind('wbAddBtn', function() { var inp = _wbEl('pdfDocInput'); if (inp) inp.click(); });
+    bind('wbRotLBtn', function() { wbRotate(-90); });
+    bind('wbRotRBtn', function() { wbRotate(90); });
+    bind('wbMoveLBtn', function() { wbMove(-1); });
+    bind('wbMoveRBtn', function() { wbMove(1); });
+    bind('wbBlankBtn', wbInsertBlank);
+    bind('wbDelBtn', wbDelete);
+    bind('wbExtractBtn', wbExtract);
+    bind('wbNumBtn', wbPageNumbers);
+    bind('wbWaterBtn', wbWatermark);
+    bind('wbMetaBtn', wbProperties);
+    bind('wbSplitBtn', wbSplit);
+    bind('wbSaveBtn', wbSave);
+    bind('wbExitBtn', function() { _wbHide(); });
+    bind('wbAllBtn', function() {
+      _wbSel.clear();
+      for (var i = 0; i < _wbPages.length; i++) _wbSel.add(i);
+      _wbRefreshSel();
+    });
+    bind('wbNoneBtn', function() { _wbSel.clear(); _wbAnchor = -1; _wbRefreshSel(); });
+    bind('wbModalOk', function() { if (_wbModalResolve) _wbModalResolve(true); });
+    bind('wbModalCancel', function() { if (_wbModalResolve) _wbModalResolve(false); });
+  })();
+
+  (function wbHookInput() {
+    var docInput = _wbEl('pdfDocInput');
+    if (docInput) docInput.addEventListener('change', function(e) { wbAddFiles(e.target.files); docInput.value = ''; });
+    var openBtn = _wbEl('pdfOpenPdfBtn');
+    if (openBtn) openBtn.addEventListener('click', function(e) { e.stopPropagation(); if (docInput) docInput.click(); });
+  })();
 
 
 
