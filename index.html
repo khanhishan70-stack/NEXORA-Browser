@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="polish.css">
 </head>
 <body>
 <div class="progress" id="progress" aria-hidden="true"></div>
@@ -54,11 +55,48 @@
       </div>
       <p class="hero-note"><button class="linklike" data-github>View on GitHub</button> <span aria-hidden="true">·</span> <span id="heroReleaseNote">Latest: v1.2.0 · 2026-10-17</span></p>
     </div>
-    <div class="hero-visual" aria-label="Real NEXORA Browser home screen">
-      <div class="shot-frame">
-        <div class="shot-bar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="shot-tag">● Real screenshot · NEXORA home</span></div>
-        <img src="assets/screenshots/nexora-home.png" alt="Real NEXORA Browser home screen with clock, search and shortcuts" loading="eager">
+    <div class="hero-visual" aria-label="Interactive NEXORA monitor demo">
+      <div class="monitor-stage">
+        <div class="monitor-glow" aria-hidden="true"></div>
+        <div class="monitor">
+          <div class="monitor-bezel">
+            <div class="shot-bar"><span class="monitor-camera" aria-hidden="true"></span><span class="shot-tag" id="monitorTag">INTERACTIVE DEMO · DISPLAY OFF</span></div>
+            <div class="monitor-screen" id="monitorScreen" data-state="off" aria-describedby="monitorStatus">
+              <div class="monitor-off" id="monitorOff"><span aria-hidden="true">◉</span><strong>DISPLAY OFF</strong><small>Press Power to show the desktop</small></div>
+              <div class="monitor-boot" id="monitorBoot" hidden><svg class="brand-mark boot-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0d1512"/><path d="M18 46V18l28 28V18" stroke="#00fff9" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><strong>NEXORA</strong><span class="boot-spinner" aria-hidden="true"></span><small>Preparing desktop preview…</small></div>
+              <div class="monitor-desktop" id="monitorDesktop" hidden>
+                <div class="desktop-logo" aria-hidden="true">N<span>EXORA</span><small>THE WEB, REIMAGINED.</small></div>
+                <div class="desktop-app">
+                  <button id="launchBrowser" type="button" aria-controls="monitorBrowser" aria-label="Open NEXORA Browser demo">
+                    <span class="desktop-app-icon" aria-hidden="true"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0d1512"/><path d="M18 46V18l28 28V18" stroke="#00fff9" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="desktop-app-label">NEXORA Browser</span>
+                  </button>
+                  <p class="desktop-instruction">Select the icon to open the browser preview</p>
+                </div>
+                <div class="desktop-taskbar" aria-hidden="true"><span>▦</span><span>◉</span><span>◌</span><time>10:24</time></div>
+              </div>
+              <div class="monitor-browser" id="monitorBrowser" hidden>
+                <div class="browser-chrome"><span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-address">nexora://home</span></div>
+                <img id="monitorShot" src="assets/screenshots/nexora-home.png" alt="NEXORA Browser home screen with clock, search and shortcuts" loading="eager">
+                <div class="monitor-caption" id="monitorCaption">NEXORA home · Clock, search, shortcuts, rails.</div>
+              </div>
+              <span class="screen-reflection" aria-hidden="true"></span>
+            </div>
+            <span class="monitor-led" aria-hidden="true"></span>
+          </div>
+          <div class="monitor-neck" aria-hidden="true"></div>
+          <div class="monitor-base" aria-hidden="true"><span></span></div>
+        </div>
       </div>
+      <div class="monitor-controls" aria-label="Monitor controls">
+        <button class="monitor-power" id="monitorPower" type="button" aria-pressed="false" aria-controls="monitorScreen"><span aria-hidden="true">⏻</span><b>Power</b></button>
+        <div class="slide-controls" id="slideControls" hidden>
+          <button type="button" id="slidePrev" aria-label="Previous screenshot">‹</button>
+          <span id="slideIndicator" aria-live="off">1 / 6</span>
+          <button type="button" id="slideNext" aria-label="Next screenshot">›</button>
+        </div>
+      </div>
+      <p class="monitor-status" id="monitorStatus" role="status" aria-live="polite" aria-atomic="true">Monitor is off · Press Power to show the desktop</p>
       <div class="hero-badges"><span>v1.2.0</span><span>Windows x64</span><span>Free download</span></div>
     </div>
   </div>
@@ -78,6 +116,26 @@
   <p class="kicker">Features</p>
   <h2>EVERYTHING YOU NEED.<br>NOTHING IN YOUR WAY.</h2>
   <p class="sub">Every card below is a real, working part of NEXORA Browser — not a concept.</p>
+  <div class="monitor-wall" id="featureMonitorWall" aria-label="Feature highlights shown on three monitors">
+    <article class="showcase-monitor" data-monitor-kind="feature" aria-roledescription="carousel" aria-label="Feature highlights monitor one">
+      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES · 01</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+      <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
+      <div class="showcase-caption"><strong class="showcase-title"></strong><span class="showcase-summary"></span></div>
+      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">‹</button><span class="showcase-count">01 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">›</button></div>
+    </article>
+    <article class="showcase-monitor" data-monitor-kind="feature" aria-roledescription="carousel" aria-label="Feature highlights monitor two">
+      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES · 02</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+      <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
+      <div class="showcase-caption"><strong class="showcase-title"></strong><span class="showcase-summary"></span></div>
+      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">‹</button><span class="showcase-count">02 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">›</button></div>
+    </article>
+    <article class="showcase-monitor" data-monitor-kind="feature" aria-roledescription="carousel" aria-label="Feature highlights monitor three">
+      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES · 03</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+      <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
+      <div class="showcase-caption"><strong class="showcase-title"></strong><span class="showcase-summary"></span></div>
+      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">‹</button><span class="showcase-count">03 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">›</button></div>
+    </article>
+  </div>
   <div class="cards">
     <article class="card reveal"><div class="card-ico">🗂️</div><h3>Vertical Tabs, Reimagined</h3><p>A slim icon rail keeps every site one click away, with lazy loading so background tabs stay light.</p></article>
     <article class="card reveal"><div class="card-ico">🪟</div><h3>Stage Manager Tab Previews</h3><p>Hover any tab and a tilted stack of live page previews fans out — recognise any page at a glance, click a card to jump to it.</p></article>
@@ -187,12 +245,18 @@
 <!-- ================= SETUP ================= -->
 <section class="section" id="setup">
   <p class="kicker">Setup guide</p>
-  <h2>UP AND RUNNING<br>IN 5 MINUTES.</h2>
-  <p class="sub">No installers, no accounts, no keys. One file does the whole setup for you.</p>
+  <h2>UP AND RUNNING<br>IN 5 STEPS.</h2>
+  <p class="sub">No required account or API key. First launch downloads and installs the AI components, so allow extra time.</p>
+  <div class="setup-showcase" id="setupShowcase" aria-roledescription="carousel" aria-label="Setup guide slideshow">
+    <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">NEXORA · SETUP GUIDE</span></div><div class="showcase-screen"><div class="setup-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+    <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
+    <div class="showcase-caption"><strong class="setup-title"></strong><span class="setup-summary"></span></div>
+    <div class="showcase-controls"><button type="button" id="setupPrev" aria-label="Previous setup step">‹</button><div class="showcase-dots" id="setupDots" role="tablist" aria-label="Setup steps"></div><button type="button" id="setupNext" aria-label="Next setup step">›</button><span class="step-indicator" id="setupIndicator">1 / 5</span></div>
+  </div>
   <div class="cards">
     <article class="card reveal"><div class="card-ico">⬇️</div><h3>1 · Download the ZIP</h3><p>Hit <strong>Download for Windows</strong> above — Windows 10/11, 64-bit. You need internet once and about 2&nbsp;GB free (browser + AI model).</p></article>
     <article class="card reveal"><div class="card-ico">📂</div><h3>2 · Extract it anywhere</h3><p>Right-click the ZIP → <strong>Extract All</strong>. Open the <strong>"NEXORA Browser"</strong> folder inside.</p></article>
-    <article class="card reveal"><div class="card-ico">▶️</div><h3>3 · Double-click launch.bat</h3><p>That's the whole install. First run takes a few minutes: it finds or installs real Python, installs the AI pieces, then installs Ollama and downloads the free offline AI model (one time only).</p></article>
+    <article class="card reveal"><div class="card-ico">▶️</div><h3>3 · Double-click launch.bat</h3><p>First run may take longer: it finds or installs Python, sets up the AI pieces, then installs Ollama and downloads the free offline AI model (one time only).</p></article>
     <article class="card reveal"><div class="card-ico">🌐</div><h3>4 · Browse — AI included</h3><p>The browser opens by itself. ESTA chat works out of the box, even with no internet, thanks to the on-device model.</p></article>
     <article class="card reveal"><div class="card-ico">☁️</div><h3>5 · Cloud AI (optional)</h3><p>Want the smarter cloud chat too? Grab a free key at <strong>console.groq.com</strong>, paste it as <strong>GROQ_API_KEY=…</strong> in <strong>ai UI DESIGN\backend\.env</strong>, and re-run launch.bat.</p></article>
     <article class="card reveal"><div class="card-ico">🛟</div><h3>Stuck? 3 quick fixes</h3><p><strong>SmartScreen warning</strong> → More info → Run anyway (we're not signed yet). <strong>"Backend FAILED"</strong> → open <strong>pip-install.log</strong> next to launch.bat, the last lines say why (usually no internet — just re-run). <strong>Nothing opens</strong> → close any other NEXORA window first; two copies can't share one profile.</p></article>
