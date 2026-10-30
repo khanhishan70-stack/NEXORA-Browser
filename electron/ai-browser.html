@@ -9839,6 +9839,44 @@
       color: #c084fc;
     }
 
+    /* Download actions row: Save-as-PDF + direct file download. Distinct
+       green accent so it reads as "get files" and stands apart from the
+       purple vision tools. */
+    .ap-dl-actions {
+      display: flex;
+      gap: 4px;
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .ap-dl-btn {
+      flex: 1;
+      justify-content: center;
+      padding: 5px 8px;
+      border: 1px solid rgba(0,255,170,0.12);
+      border-radius: 8px;
+      background: rgba(0,60,40,0.18);
+      color: rgba(120,255,190,0.75);
+      font-size: 10px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .ap-dl-btn:hover {
+      background: linear-gradient(135deg,rgba(0,255,170,0.12),rgba(0,180,255,0.06));
+      border-color: rgba(0,255,170,0.25);
+      color: #66ffcc;
+    }
+    .ap-dl-btn.busy {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
     .crop-overlay {
       position: fixed;
       inset: 0;
@@ -10727,6 +10765,468 @@
       border-color: transparent !important;
       box-shadow: none !important;
     }
+
+    /* ===== INTELLIGENT SEARCH POPUP — AURORA GLASS CARDS =====
+       A DETACHED frosted slab that floats with a clear gap under the focused
+       bar — never glued on like Google. Every suggestion group is its own
+       glass card, ringed by a slowly rotating cyan→blue→violet aurora edge,
+       and the cards spring in staggered when the popup opens. Only opacity
+       and transform animate (composited work only), ~180-240ms on NEXORA's
+       easing curve. Lives on <body> so wallpaper/transforms can't clip it. */
+    @property --sx-ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+    @keyframes sxAuroraSpin { to { --sx-ang: 360deg; } }
+    @keyframes sxCardIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .sx-pop {
+      position: fixed;
+      z-index: 100000;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, rgba(16, 22, 44, 0.80), rgba(9, 12, 30, 0.88));
+      backdrop-filter: blur(34px) saturate(165%);
+      -webkit-backdrop-filter: blur(34px) saturate(165%);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 24px;
+      box-shadow:
+        0 34px 74px rgba(0, 0, 0, 0.55),
+        0 0 60px rgba(0, 229, 255, 0.10),
+        0 0 130px rgba(138, 43, 226, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 0.09);
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(-14px) scale(0.97);
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+        visibility 0s linear 0.24s;
+      font-family: 'Inter', sans-serif;
+    }
+    /* Rotating aurora ring painted along the inner edge */
+    .sx-pop::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1.5px;
+      background: conic-gradient(from var(--sx-ang),
+        rgba(0, 229, 255, 0.95),
+        rgba(59, 130, 246, 0.7),
+        rgba(138, 43, 226, 0.95),
+        rgba(0, 229, 255, 0.95));
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      animation: sxAuroraSpin 7s linear infinite;
+      pointer-events: none;
+      z-index: 4;
+    }
+    /* Soft aurora bloom drifting over the glass */
+    .sx-pop::after {
+      content: '';
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: -45%;
+      height: 85%;
+      background: radial-gradient(ellipse at center,
+        rgba(0, 229, 255, 0.10),
+        rgba(138, 43, 226, 0.06) 45%,
+        transparent 72%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .sx-pop.sx-open {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      visibility: visible;
+      pointer-events: auto;
+      transition:
+        opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1) 0.02s,
+        transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) 0.02s,
+        visibility 0s linear 0s;
+    }
+    /* Not enough room below the bar: floats ABOVE it the same way */
+    .sx-pop.sx-up { transform: translateY(14px) scale(0.97); }
+    .sx-pop.sx-up.sx-open { transform: translateY(0) scale(1); }
+
+    .sx-list {
+      position: relative;
+      z-index: 3;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 12px 10px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;   /* breathing room BETWEEN the floating glass cards */
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 229, 255, 0.25) transparent;
+    }
+    .sx-list::-webkit-scrollbar { width: 8px; }
+    .sx-list::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, 0.2); border-radius: 8px; }
+    .sx-list::-webkit-scrollbar-track { background: transparent; }
+
+    /* ===== one floating glass card per suggestion group ===== */
+    .sx-group {
+      position: relative;
+      flex: 0 0 auto;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.07),
+        0 10px 26px rgba(0, 0, 0, 0.24);
+      padding: 3px 6px 6px;
+      overflow: hidden;
+    }
+    /* staggered spring-in — only while opening, never replayed while typing */
+    .sx-list.sx-anim .sx-group { animation: sxCardIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .sx-list.sx-anim .sx-group:nth-child(1) { animation-delay: 0ms; }
+    .sx-list.sx-anim .sx-group:nth-child(2) { animation-delay: 55ms; }
+    .sx-list.sx-anim .sx-group:nth-child(3) { animation-delay: 110ms; }
+    .sx-list.sx-anim .sx-group:nth-child(4) { animation-delay: 165ms; }
+    .sx-list.sx-anim .sx-group:nth-child(5) { animation-delay: 220ms; }
+    .sx-list.sx-anim .sx-group:nth-child(n+6) { animation-delay: 265ms; }
+
+    /* card personality: AI = violet, direct URL = mint, actions = blue */
+    .sx-group.sx-g-ai {
+      background: linear-gradient(180deg, rgba(138, 43, 226, 0.15), rgba(138, 43, 226, 0.045));
+      border-color: rgba(138, 43, 226, 0.38);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(90, 20, 170, 0.30);
+    }
+    .sx-group.sx-g-go {
+      background: linear-gradient(180deg, rgba(52, 211, 153, 0.13), rgba(52, 211, 153, 0.04));
+      border-color: rgba(52, 211, 153, 0.32);
+    }
+    .sx-group.sx-g-act {
+      background: linear-gradient(180deg, rgba(96, 165, 250, 0.11), rgba(96, 165, 250, 0.03));
+      border-color: rgba(96, 165, 250, 0.24);
+    }
+
+    .sx-cat {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.38);
+      padding: 8px 12px 3px;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .sx-cat::before {   /* tiny aurora dot */
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00e5ff, #8a2be2);
+      box-shadow: 0 0 8px rgba(0, 229, 255, 0.65);
+      flex: 0 0 auto;
+    }
+    .sx-g-ai .sx-cat { color: rgba(206, 170, 255, 0.75); }
+    .sx-g-ai .sx-cat::before { background: linear-gradient(135deg, #b98cff, #8a2be2); box-shadow: 0 0 8px rgba(138, 43, 226, 0.75); }
+    .sx-g-go .sx-cat { color: rgba(150, 240, 200, 0.7); }
+    .sx-g-go .sx-cat::before { background: linear-gradient(135deg, #4ade9d, #00e5ff); }
+
+    /* suggestions = soft Canva-style pills */
+    .sx-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      margin: 3px 4px;
+      padding: 8px 13px;
+      border-radius: 999px;
+      cursor: pointer;
+      color: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+      min-width: 0;
+    }
+    .sx-row:hover {
+      background: rgba(0, 229, 255, 0.07);
+      border-color: rgba(0, 229, 255, 0.28);
+      transform: translateX(3px);
+    }
+    .sx-row.sx-sel {
+      background: linear-gradient(90deg, rgba(0, 229, 255, 0.17), rgba(59, 130, 246, 0.11) 55%, rgba(138, 43, 226, 0.13));
+      border-color: rgba(0, 229, 255, 0.48);
+      box-shadow: 0 0 24px rgba(0, 229, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    }
+    .sx-ic {
+      flex: 0 0 auto;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(0, 229, 255, 0.88);
+      font-size: 13px;
+      transition: box-shadow 0.16s ease;
+    }
+    .sx-row.sx-sel .sx-ic { box-shadow: 0 0 14px rgba(0, 229, 255, 0.35); }
+    .sx-row.sx-ai .sx-ic { background: rgba(138, 43, 226, 0.18); color: #b98cff; }
+    .sx-row.sx-act .sx-ic { background: rgba(96, 165, 250, 0.15); color: #7db6ff; }
+    .sx-row.sx-go .sx-ic { background: rgba(52, 211, 153, 0.15); color: #4ade9d; }
+    .sx-row.sx-ai.sx-sel .sx-ic { box-shadow: 0 0 14px rgba(138, 43, 226, 0.45); }
+    .sx-tx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .sx-t1 {
+      font-size: 13.5px;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sx-t2 {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.42);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sx-badge {
+      flex: 0 0 auto;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2.5px 8px;
+      border-radius: 999px;
+      color: #c9a7ff;
+      background: rgba(138, 43, 226, 0.18);
+      border: 1px solid rgba(138, 43, 226, 0.4);
+      box-shadow: 0 0 12px rgba(138, 43, 226, 0.25);
+    }
+    .sx-x {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      color: rgba(255, 255, 255, 0.34);
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+    }
+    .sx-row:hover .sx-x, .sx-row.sx-sel .sx-x { opacity: 1; }
+    .sx-x:hover { background: rgba(255, 93, 93, 0.18); color: #ff7b7b; }
+
+    .sx-foot {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 16px 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(0, 0, 0, 0.16);
+      font-size: 10.5px;
+      color: rgba(255, 255, 255, 0.35);
+      user-select: none;
+    }
+    .sx-foot kbd {
+      font-family: inherit;
+      font-size: 9.5px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.6);
+    }
+    .sx-clear {
+      border: 1px solid rgba(255, 122, 122, 0.28);
+      background: rgba(255, 93, 93, 0.09);
+      color: rgba(255, 140, 140, 0.85);
+      font-size: 10.5px;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 4px 11px;
+      border-radius: 999px;
+      transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease, box-shadow 0.16s ease;
+    }
+    .sx-clear:hover { background: rgba(255, 93, 93, 0.18); color: #ff9b9b; border-color: rgba(255, 122, 122, 0.5); box-shadow: 0 0 14px rgba(255, 93, 93, 0.2); }
+    .sx-clear:focus-visible, .sx-row:focus-visible { outline: 2px solid rgba(0, 229, 255, 0.5); outline-offset: -2px; }
+
+    /* Light theme: milky Canva glass — readable on bright wallpapers */
+    .light-mode .sx-pop {
+      background: linear-gradient(180deg, rgba(248, 250, 255, 0.82), rgba(238, 242, 250, 0.90));
+      border-color: rgba(20, 40, 80, 0.08);
+      box-shadow:
+        0 34px 74px rgba(20, 30, 60, 0.22),
+        0 0 44px rgba(0, 150, 210, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+    .light-mode .sx-group {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.38));
+      border-color: rgba(20, 40, 80, 0.07);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 20px rgba(30, 50, 90, 0.08);
+    }
+    .light-mode .sx-group.sx-g-ai {
+      background: linear-gradient(180deg, rgba(138, 43, 226, 0.13), rgba(138, 43, 226, 0.05));
+      border-color: rgba(138, 43, 226, 0.3);
+    }
+    .light-mode .sx-group.sx-g-go {
+      background: linear-gradient(180deg, rgba(52, 211, 153, 0.14), rgba(52, 211, 153, 0.05));
+      border-color: rgba(30, 160, 110, 0.3);
+    }
+    .light-mode .sx-group.sx-g-act {
+      background: linear-gradient(180deg, rgba(96, 165, 250, 0.13), rgba(96, 165, 250, 0.05));
+      border-color: rgba(40, 110, 220, 0.22);
+    }
+    .light-mode .sx-cat { color: rgba(20, 30, 60, 0.5); }
+    .light-mode .sx-g-ai .sx-cat { color: rgba(110, 50, 200, 0.75); }
+    .light-mode .sx-g-go .sx-cat { color: rgba(20, 140, 95, 0.8); }
+    .light-mode .sx-row { color: rgba(15, 22, 44, 0.9); border-color: rgba(20, 40, 80, 0.06); }
+    .light-mode .sx-row:hover { background: rgba(0, 160, 220, 0.10); border-color: rgba(0, 150, 210, 0.4); }
+    .light-mode .sx-row.sx-sel {
+      background: linear-gradient(90deg, rgba(0, 160, 220, 0.18), rgba(120, 80, 230, 0.12));
+      border-color: rgba(0, 150, 210, 0.5);
+      box-shadow: 0 0 20px rgba(0, 160, 220, 0.2);
+    }
+    .light-mode .sx-ic { background: rgba(10, 30, 60, 0.07); color: rgba(0, 120, 180, 0.9); }
+    .light-mode .sx-t2 { color: rgba(20, 30, 60, 0.5); }
+    .light-mode .sx-foot { background: rgba(255, 255, 255, 0.45); border-top-color: rgba(10, 30, 60, 0.08); color: rgba(20, 30, 60, 0.55); }
+    .light-mode .sx-foot kbd { border-color: rgba(10, 30, 60, 0.18); background: rgba(10, 30, 60, 0.05); color: rgba(20, 30, 60, 0.7); }
+    .light-mode .sx-clear { color: rgba(200, 50, 50, 0.85); border-color: rgba(200, 50, 50, 0.28); background: rgba(255, 80, 80, 0.08); }
+    .light-mode .sx-badge { color: #7c3aed; background: rgba(138, 43, 226, 0.12); border-color: rgba(138, 43, 226, 0.32); box-shadow: none; }
+
+    /* Wallpaper/performance mode: translucency costs GPU — drop the blur only */
+    body.performance-mode .sx-pop { backdrop-filter: none; -webkit-backdrop-filter: none; }
+    body.performance-mode .sx-pop::before { animation: none; }   /* no aurora spin on weak GPUs */
+
+    /* ===== FAN MODE (homepage) — glass cards spread AROUND the bar =====
+       Same #sxPop element, switched to .sx-fan: the panel shell becomes an
+       invisible full-area overlay (pointer-events pass through it) and every
+       suggestion becomes its own glass card dealt out to the left and right
+       of the search bar, gently rotated like a spread hand of cards. */
+    .sx-pop.sx-fan {
+      background: none;
+      border: none;
+      box-shadow: none;
+      border-radius: 0;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      overflow: visible;
+      pointer-events: none;             /* only the cards/foot take the pointer */
+      transform: none;                  /* cards deal in, not the whole panel */
+    }
+    .sx-pop.sx-fan.sx-open { transform: none; }
+    .sx-pop.sx-fan.sx-up, .sx-pop.sx-fan.sx-up.sx-open { transform: none; }
+    .sx-pop.sx-fan::before, .sx-pop.sx-fan::after { display: none; }  /* ring/bloom = dropdown only */
+    .sx-pop.sx-fan .sx-list {
+      position: absolute;
+      left: 0; top: 0; right: 0; bottom: 0;
+      padding: 0;
+      margin: 0;
+      display: block;
+      overflow: visible;
+      max-height: none;
+      gap: 0;
+      scrollbar-width: none;
+    }
+    .sx-pop.sx-fan .sx-list::-webkit-scrollbar { width: 0; height: 0; }
+
+    /* one glass card per recommendation */
+    .sx-pop.sx-fan .sx-row {
+      position: absolute;
+      margin: 0;
+      padding: 10px 12px;
+      gap: 11px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(16, 22, 44, 0.88), rgba(9, 12, 30, 0.93));
+      backdrop-filter: blur(26px) saturate(160%);
+      -webkit-backdrop-filter: blur(26px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      box-shadow:
+        0 18px 44px rgba(0, 0, 0, 0.45),
+        0 0 30px rgba(0, 229, 255, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+      transform: rotate(var(--rot, 0deg));
+      transition:
+        transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        background 0.14s ease,
+        border-color 0.14s ease,
+        box-shadow 0.16s ease;
+      pointer-events: auto;
+      cursor: pointer;
+      z-index: 1;
+    }
+    .sx-pop.sx-fan .sx-row:hover {
+      background: linear-gradient(180deg, rgba(0, 229, 255, 0.12), rgba(9, 12, 30, 0.93));
+      border-color: rgba(0, 229, 255, 0.38);
+      transform: rotate(var(--rot, 0deg)) translateY(-3px) scale(1.03);
+      box-shadow:
+        0 24px 54px rgba(0, 0, 0, 0.5),
+        0 0 36px rgba(0, 229, 255, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.13);
+      z-index: 3;
+    }
+    .sx-pop.sx-fan .sx-row.sx-sel {
+      background: linear-gradient(120deg, rgba(0, 229, 255, 0.17), rgba(59, 130, 246, 0.13) 55%, rgba(138, 43, 226, 0.17));
+      border-color: rgba(0, 229, 255, 0.55);
+      transform: rotate(var(--rot, 0deg)) translateY(-4px) scale(1.05);
+      box-shadow:
+        0 26px 58px rgba(0, 0, 0, 0.5),
+        0 0 42px rgba(0, 229, 255, 0.26),
+        0 0 90px rgba(138, 43, 226, 0.13),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      z-index: 4;
+    }
+    /* category chip sits above the title inside each card */
+    .sx-pop.sx-fan .sx-cat {
+      padding: 0;
+      margin: 0 0 1px;
+      font-size: 8.5px;
+      letter-spacing: 0.14em;
+    }
+    .sx-pop.sx-fan .sx-cat::before { width: 4px; height: 4px; }
+
+    /* deal-in animation: cards fly outward from the bar, staggered */
+    @keyframes sxFanIn {
+      from { opacity: 0; transform: translateX(var(--fan-dx, 0)) rotate(0deg) scale(0.84); }
+      to { opacity: 1; transform: translateX(0) rotate(var(--rot, 0deg)) scale(1); }
+    }
+    .sx-pop.sx-fan .sx-list.sx-anim .sx-row { animation: sxFanIn 0.44s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .sx-pop.sx-fan .sx-list.sx-anim .sx-row:nth-child(1) { animation-delay: 0ms; }
+    .sx-pop.sx-fan .sx-list.sx-anim .sx-row:nth-child(2) { animation-delay: 45ms; }
+    .sx-pop.sx-fan .sx-list.sx-anim .sx-row:nth-child(3) { animation-delay: 90ms; }
+    .sx-pop.sx-fan .sx-list.sx-anim .sx-row:nth-child(4) { animation-delay: 135ms; }
+    .sx-pop.sx-fan .sx-list.sx-anim .sx-row:nth-child(5) { animation-delay: 180ms; }
+    .sx-pop.sx-fan .sx-list.sx-anim .sx-row:nth-child(6) { animation-delay: 225ms; }
+
+    /* The fan shows NO hint/clear strip under the bar — the classic Google
+       dropdown keeps it, switchable in Customize → Search Style. */
+    .sx-pop.sx-fan .sx-foot { display: none; }
+
+    /* Light theme: milky glass cards on bright wallpapers */
+    .light-mode .sx-pop.sx-fan .sx-row {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(243, 246, 253, 0.88));
+      border-color: rgba(20, 40, 80, 0.10);
+      box-shadow: 0 18px 44px rgba(20, 30, 60, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    }
+    .light-mode .sx-pop.sx-fan .sx-row:hover {
+      background: linear-gradient(180deg, rgba(226, 248, 255, 0.95), rgba(243, 246, 253, 0.9));
+      border-color: rgba(0, 150, 210, 0.45);
+    }
+    .light-mode .sx-pop.sx-fan .sx-row.sx-sel {
+      background: linear-gradient(120deg, rgba(0, 160, 220, 0.20), rgba(120, 80, 230, 0.15));
+      border-color: rgba(0, 150, 210, 0.55);
+      box-shadow: 0 24px 56px rgba(20, 30, 60, 0.22), 0 0 34px rgba(0, 160, 220, 0.22);
+    }
+    .light-mode .sx-pop.sx-fan .sx-cat { color: rgba(20, 30, 60, 0.55); }
+
+    /* Weak GPU: no per-card blur, no deal animation */
+    body.performance-mode .sx-pop.sx-fan .sx-row { backdrop-filter: none; -webkit-backdrop-filter: none; animation: none; }
 
     /* 3D Window dots */
     .window-dots .dot {
@@ -12236,6 +12736,7 @@
       <div class="download-panel-header">
         <span>Downloads</span>
         <div class="download-panel-header-actions">
+          <button id="openDlFolderBtn" title="Open the downloads folder">Open folder</button>
           <button id="clearDownloadsBtn">Clear all</button>
           <button id="downloadPanelClose" class="panel-exit-btn" title="Exit Downloads" aria-label="Exit Downloads"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg></button>
         </div>
@@ -12303,6 +12804,22 @@
           <option value="google">Google</option>
         </select>
       </label>
+      <label class="setting-row">
+        <span>Search Style <span style="opacity:0.5;">(suggestions)</span></span>
+        <select id="settingSuggestStyle">
+          <option value="fan">Fan cards</option>
+          <option value="google">Google dropdown</option>
+        </select>
+      </label>
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;">Remember my searches <span style="opacity:0.5;">(search suggestions)</span></span>
+          <label class="switch" style="position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;">
+            <input type="checkbox" id="searchHistToggle" style="opacity:0;width:0;height:0;">
+            <span class="slider" style="position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,0.1);border-radius:20px;transition:0.3s;"></span>
+          </label>
+        </div>
+      </div>
       <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:12px;">Offline AI Chat <span style="opacity:0.5;">(local qwen3 1.7b)</span></span>
@@ -12325,6 +12842,44 @@
           <option value="gtts_de">German</option>
         </select>
       </label>
+      <div class="setting-section-label">Downloads</div>
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;">Download folder</span>
+          <span style="display:flex;gap:6px;flex-shrink:0;">
+            <button id="dlDirChangeBtn" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid rgba(0,255,170,0.35);background:rgba(0,255,170,0.08);color:#00ffaa;cursor:pointer;">Change&hellip;</button>
+            <button id="dlDirResetBtn" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.55);cursor:pointer;">Default</button>
+          </span>
+        </div>
+        <div id="dlDirPath" style="font-size:10px;color:rgba(255,255,255,0.45);word-break:break-all;">System Downloads</div>
+      </div>
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;">Ask where to save each file</span>
+          <label class="switch" style="position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;">
+            <input type="checkbox" id="dlAskSaveToggle" style="opacity:0;width:0;height:0;">
+            <span class="slider" style="position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,0.1);border-radius:20px;transition:0.3s;"></span>
+          </label>
+        </div>
+      </div>
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;">Open download panel when a download starts</span>
+          <label class="switch" style="position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;">
+            <input type="checkbox" id="dlAutoPanelToggle" style="opacity:0;width:0;height:0;">
+            <span class="slider" style="position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,0.1);border-radius:20px;transition:0.3s;"></span>
+          </label>
+        </div>
+      </div>
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;">Notify when a download completes</span>
+          <label class="switch" style="position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;">
+            <input type="checkbox" id="dlNotifyToggle" style="opacity:0;width:0;height:0;">
+            <span class="slider" style="position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,0.1);border-radius:20px;transition:0.3s;"></span>
+          </label>
+        </div>
+      </div>
       <label class="setting-row" id="particlesRow" style="display:none;">
         <span>Particles Background</span>
         <select id="settingParticles">
@@ -14267,6 +14822,8 @@
       <button class="shortcut-btn cat-btn" data-cat="other" title="Other">&#x1f4cb;</button>
       <div class="sr-divider"></div>
       <button class="shortcut-btn" id="vDownloadsBtn" title="Downloads" data-tool-id="downloads" style="position:relative;">&#x2193;<span class="dl-badge" id="vDlBadge">0</span></button>
+      <button class="shortcut-btn" id="vSavePdfBtn" title="Download what you are viewing - saves the live page/document as PDF (works on Scribd-style viewers) or grabs the direct file" style="position:relative;color:#34d399;">&#x2B07;<span class="sb-label" style="color:#34d399;">PDF</span></button>
+      <button class="shortcut-btn" id="vSaveWordBtn" title="Save what you are viewing as a Word document (.docx) - keeps the text, headings, lists and tables of the page you are looking at" style="position:relative;color:#60a5fa;">&#x1F4DD;<span class="sb-label" style="color:#60a5fa;">DOCX</span></button>
       <button class="shortcut-btn" id="vHistoryBtn" title="Browsing History - every site, every day" style="position:relative;">&#x1f553;<span class="sb-label">Hist</span></button>
       <button class="shortcut-btn" id="vYtDlBtn" title="Download YouTube Video" data-tool-id="ytdl" style="position:relative;color:#ff4444;">&#x25b6;<span class="sb-label" id="vYtDlLabel">YT DL</span></button>
       <button class="shortcut-btn" id="vPdfBtn" title="pic2pdf Converter" data-tool-id="pdf">&#x1f4c4;</button>
@@ -14755,6 +15312,11 @@
         <button class="ap-vision-btn" data-vision="explainpage" title="Explain what this page is about">&#x1F4C4; Explain Page</button>
         <button class="ap-vision-btn" data-vision="analyze" title="Analyze selected content">&#x1F50D; Analyze Selection</button>
       </div>
+      <div class="ap-dl-actions" id="apDlActions">
+        <button class="ap-dl-btn" id="apSavePdfBtn" title="Save the page or document you are viewing as a PDF file in your download folder">&#x1F4C4; Save as PDF</button>
+        <button class="ap-dl-btn" id="apSaveWordBtn" title="Save the page or document you are viewing as an editable Word (.docx) file in your download folder">&#x1F4DD; Save as Word</button>
+        <button class="ap-dl-btn" id="apDlFileBtn" title="Download the actual file open on this page (PDF, ZIP, DOCX...) through the download manager">&#x2B07; Download File</button>
+      </div>
       <input type="file" id="apImageUpload" accept="image/*" style="display:none">
       <div class="ap-translate-row" id="apTranslateRow">
         <select id="apTranslateLang">
@@ -15081,18 +15643,11 @@
   state.webviewCanGoFwd = false;
 
   // ===== WEBVIEW MANAGEMENT =====
-  // TEMP-PERF-INSTRUMENTATION (remove after diagnosis)
-  var _perfT0 = 0;
-  var _perfSeq = 0;
-  function _PT(tag) {
-    try {
-      var now = performance.now();
-      if (!_perfT0) _perfT0 = now;
-      var d = (now - _perfT0).toFixed(1);
-      console.log('[NAV-T] ' + (++_perfSeq) + ' t=' + d + 'ms ' + tag + ' url=' + ((siteWebview && siteWebview.getURL) ? String(siteWebview.getURL()).slice(0,60) : ''));
-      try { if (window.electronAPI && window.electronAPI.send) window.electronAPI.send('neo-navtrace', (++_perfSeq) + ' t=' + d + 'ms ' + tag); } catch(e) {}
-    } catch(e) { console.log('[NAV-T] ' + tag); }
-  }
+  // _PT (nav-timing trace logger) REMOVED. It used to push an IPC to the main
+  // process on 4-6 events per navigation, where the main process did a
+  // SYNCHRONOUS appendFileSync to a temp file — stalling the very thread that
+  // drives page loading. Kept as a no-op so existing call sites stay free.
+  function _PT(tag) { /* intentionally empty (perf) */ }
   var _listenerRegistrations = [];
   var _beatPreloadPath = '';
   function _registerWebviewListeners(fn) {
@@ -15344,26 +15899,18 @@
   var _lastRecoverAt = 0;
   var _beatPollPendingResume = false;
 
-  // Two-step size re-assertion on the webview element itself. Per the known
-  // Windows compositing bug (Chromium loses the guest surface after a load and a
-  // single setBounds does nothing), changing the element to one pixel short and
-  // then back to the real size across two event-loop turns makes Chromium treat
-  // it as a real resize and submit a fresh frame. This is the non-hanging
-  // equivalent of the only recovery that reliably works (element recreation).
+  // Re-establish the compositor link after a load WITHOUT touching geometry.
+  // This used to shrink the webview element by 1px and restore it 150ms later,
+  // forcing Chromium to treat it as a real resize. That produced a guaranteed
+  // visible flicker on every single load. The overlay-plane root cause it worked
+  // around is fixed in this build, so we now only request a repaint (cheap, no
+  // size change, no flicker).
   function reassertWebviewSize() {
     var el = siteWebview;
     if (!el || document.hidden) return;
     if (_neoSplit && _neoSplit.active) return; // pane sizes are managed by _applyWebviewLayout
     try {
-      var h = el.offsetHeight;
-      if (!h || h < 5) return;
-      el.style.height = (h - 1) + 'px';
-      setTimeout(function() {
-        try {
-          el.style.height = '';
-          if (window.electronAPI && window.electronAPI.kickCompositor) window.electronAPI.kickCompositor();
-        } catch(e) {}
-      }, 150);
+      if (window.electronAPI && window.electronAPI.kickCompositor) window.electronAPI.kickCompositor();
     } catch(e) {}
   }
 
@@ -15596,8 +16143,22 @@
   }
 
   // Main process notifies us when a webview guest renderer died; recover the page.
+  // deadWcId identifies WHICH guest crashed. A pooled background keep-alive guest
+  // (there can be several) dying must NOT reload the healthy visible page — only
+  // recover when the dead guest IS the visible siteWebview.
   if (window.electronAPI && window.electronAPI.onWebviewRecover) {
-    window.electronAPI.onWebviewRecover(function() {
+    window.electronAPI.onWebviewRecover(function(deadWcId) {
+      try {
+        if (deadWcId != null && siteWebview && typeof siteWebview.getWebContentsId === 'function') {
+          var visId = -1;
+          try { visId = siteWebview.getWebContentsId(); } catch(e) { visId = -1; }
+          if (visId !== -1 && visId !== deadWcId) {
+            // A hidden/pooled guest died — leave the visible page alone.
+            console.warn('[PAINT] background guest ' + deadWcId + ' died (visible=' + visId + '); skipping reload');
+            return;
+          }
+        }
+      } catch(e) {}
       var url = '';
       try { url = siteWebview && siteWebview.getURL(); } catch(e) {}
       console.warn('[PAINT] guest renderer died -> recovering');
@@ -15730,23 +16291,20 @@
           }
         }
       });
-      // Cross-domain navigation: only reroute the visible webview. Hidden tabs
-      // keep-alive in their own webview and navigate freely.
-      // Do NOT block auth/OAuth redirect chains — let them navigate naturally.
+      // Cross-host navigation in the visible webview is now left ALONE (it
+      // proceeds naturally, exactly like Chrome). This handler used to
+      // preventDefault() every cross-host navigation and restart it via
+      // navigate() — which re-issued cross-host POST form submits as GET
+      // (losing data), double-loaded pages that hop domains via location, and
+      // discarded in-flight work. That was a real "some sites glitch / reload"
+      // source. Its old purpose — routing cross-domain navs to a per-domain
+      // webview / the WebContentsView — is gone: there is a single shared
+      // 'persist:webview' and _wcvEnabled() is false. Tab URL/title still sync
+      // via did-navigate / page-title-updated, and the history-lock guard is
+      // enforced independently in main.js. We keep this listener as a no-op
+      // pass-through so auth/OAuth behavior is unchanged and easy to trace.
       wv.addEventListener('will-navigate', (e) => {
-        if (wv === siteWebview) {
-          try {
-            var newHost = new URL(e.url).hostname.replace('www.', '').toLowerCase();
-            var curHost = new URL(wv.src || '').hostname.replace('www.', '').toLowerCase();
-            // Allow auth/OAuth redirects to navigate freely within the same webview
-            var isAuthNav = /accounts\.google\.com|microsoftonline|github\.com\/login|discord\.com\/oauth|facebook\.com\/dialog|login\.yahoo|login\.live|oauth|signin|auth0\.com|okta\.com|sso\//i.test(e.url);
-            if (isAuthNav) return; // Don't intercept auth navigations
-            if (newHost && curHost && newHost !== curHost) {
-              e.preventDefault();
-              navigate(e.url);
-            }
-          } catch(ex) {}
-        }
+        // intentionally not intercepted (see comment above)
       });
       // Log auth redirects for debugging
       wv.addEventListener('will-redirect', (e) => {
@@ -15912,23 +16470,33 @@
       // so it avoids the black/blank-screen bug that preload injection causes on
       // this machine. It won't stop Spotify's DRM path, but it hides the embedded
       // browser fingerprint before most pages finish their checks.
+      // PERF: dom-ready + did-finish-load both used to run the full anti-detect
+      // payload on every load (2× IPC + script parse per navigation). We track a
+      // per-document generation (bumped on did-start-loading); dom-ready marks it
+      // done, and did-finish-load only re-runs if dom-ready never fired for this
+      // document (the original safety intent) — so normal loads inject once.
+      wv.addEventListener('did-start-loading', function() {
+        wv._adGen = (wv._adGen || 0) + 1;
+        wv._adDoneGen = 0;
+      });
       wv.addEventListener('dom-ready', function() {
         _injectFullAntiDetect(this);
+        wv._adDoneGen = wv._adGen || 1;
       });
       wv.addEventListener('did-finish-load', function() {
-        console.log('[YTDL] did-finish-load fired, url:', this.src);
         var _loadUrl = (this.src || '').toLowerCase();
         var _isYT = _loadUrl.indexOf('youtube.com') !== -1;
-        // Full anti-detection (runs again in case dom-ready missed it)
-        _injectFullAntiDetect(this);
+        // Full anti-detection only if dom-ready did NOT already cover this document.
+        if (wv._adDoneGen !== (wv._adGen || 1)) {
+          _injectFullAntiDetect(this);
+          wv._adDoneGen = wv._adGen || 1;
+        }
         // YouTube-only post-load injections: download button + ad-blocker.
         // Previously this ran heavy guest scripts (60ms poll, MutationObserver,
         // fetch/XHR patches) on EVERY site, driving high CPU and guest crashes.
         if (_isYT) {
           clearTimeout(_ytInjectTimer);
-          console.log('[YTDL] Cleared existing timer, setting 1.5s delay for injection');
           _ytInjectTimer = setTimeout(function() {
-            console.log('[YTDL] 1.5s delay elapsed, calling injectYTDownloadBtn');
             injectYTDownloadBtn(wv);
           }, 1500);
         }
@@ -16182,6 +16750,70 @@
   const downloadBadge = document.getElementById('downloadBadge');
   let downloads = [];
   let downloadPanelOpen = false;
+  // Downloads live only for this session: after a restart there is no real
+  // download behind an entry anymore, so restoring "in progress" items would
+  // leave zombie rows at 0% whose Pause/Cancel/Retry buttons can never work
+  // (their old URLs are often dead too). Keep only finished ones.
+  function _dlRestoreList(list) {
+    try {
+      if (!Array.isArray(list)) return [];
+      return list.filter(function(d) { return d && d.id != null && d.state === 'completed'; }).slice(0, 50);
+    } catch(e) { return []; }
+  }
+
+  // ===== DOWNLOAD SETTINGS (main-side store) =====
+  var _dlSettings = { downloadDir: '', askWhereToSave: false, autoOpenPanel: true, notifyOnComplete: true };
+  function _dlApplySettingsUI() {
+    try {
+      var dirEl = document.getElementById('dlDirPath');
+      if (dirEl) dirEl.textContent = _dlSettings.downloadDir || 'System Downloads';
+      var a = document.getElementById('dlAskSaveToggle'); if (a) a.checked = !!_dlSettings.askWhereToSave;
+      var b = document.getElementById('dlAutoPanelToggle'); if (b) b.checked = !!_dlSettings.autoOpenPanel;
+      var c = document.getElementById('dlNotifyToggle'); if (c) c.checked = !!_dlSettings.notifyOnComplete;
+    } catch(e) {}
+  }
+  function _dlSaveSettings(patch) {
+    if (!window.electronAPI || !window.electronAPI.setDownloadSettings) return Promise.resolve();
+    return window.electronAPI.setDownloadSettings(patch).then(function(res) {
+      if (res && res.settings) { _dlSettings = res.settings; _dlApplySettingsUI(); }
+      if (res && res.error && window.showToast) showToast(res.error, 'error');
+    }).catch(function() {});
+  }
+  function _dlLoadSettings() {
+    if (!window.electronAPI || !window.electronAPI.getDownloadSettings) return;
+    window.electronAPI.getDownloadSettings().then(function(s) {
+      if (s) { _dlSettings = Object.assign({}, _dlSettings, s); _dlApplySettingsUI(); }
+    }).catch(function() {});
+  }
+  (function _dlWireSettingsUI() {
+    var chg = document.getElementById('dlDirChangeBtn');
+    if (chg) chg.addEventListener('click', function() {
+      if (!window.electronAPI || !window.electronAPI.pickDownloadFolder) return;
+      window.electronAPI.pickDownloadFolder().then(function(dir) {
+        if (dir) _dlSaveSettings({ downloadDir: dir });
+      });
+    });
+    var rst = document.getElementById('dlDirResetBtn');
+    if (rst) rst.addEventListener('click', function() { _dlSaveSettings({ downloadDir: '' }); });
+    var ask = document.getElementById('dlAskSaveToggle');
+    if (ask) ask.addEventListener('change', function() { _dlSaveSettings({ askWhereToSave: ask.checked }); });
+    var pan = document.getElementById('dlAutoPanelToggle');
+    if (pan) pan.addEventListener('change', function() { _dlSaveSettings({ autoOpenPanel: pan.checked }); });
+    var ntf = document.getElementById('dlNotifyToggle');
+    if (ntf) ntf.addEventListener('change', function() { _dlSaveSettings({ notifyOnComplete: ntf.checked }); });
+    _dlLoadSettings();
+  })();
+  function _dlOpenPanel() {
+    if (downloadPanelOpen) return;
+    downloadPanelOpen = true;
+    downloadPanel.classList.add('visible');
+    loadDownloadHistory();
+  }
+  var _openDlFolderBtn = document.getElementById('openDlFolderBtn');
+  if (_openDlFolderBtn) _openDlFolderBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (window.electronAPI && window.electronAPI.openDownloadsFolder) window.electronAPI.openDownloadsFolder();
+  });
 
   function _fmtBytes(n) {
     if (!n || n < 0) return '0 B';
@@ -16235,7 +16867,7 @@
     let active = downloads.filter(d => d.state === 'progressing' || d.state === 'started').length;
     if (active) { downloadBadge.textContent = active; downloadBadge.classList.add('visible'); }
     else { downloadBadge.classList.remove('visible'); }
-    downloadList.innerHTML = downloads.map(d => {
+    downloadList.innerHTML = downloads.map(function(d, i) {
       const pct = d.total > 0 ? Math.min(100, Math.round(d.received/d.total*100)) : 0;
       const done = d.state === 'completed';
       const label = _dlStateLabel(d.state);
@@ -16258,15 +16890,21 @@
       const bar = (live || paused) ? '<div class="di-progress"><div class="fill" style="width:'+pct+'%"></div></div>' : '';
       let actions = '';
       if (done) {
-        actions = '<div class="di-actions"><button class="di-act" data-dl-open="'+ (d.name||'') +'">Open</button><button class="di-act" data-dl-folder="'+ (d.name||'') +'">Show in folder</button></div>';
+        actions = '<div class="di-actions"><button class="di-act" data-dl-open="'+ (d.name||'') +'">Open</button><button class="di-act" data-dl-folder="'+ (d.name||'') +'">Show in folder</button>'
+          + (d.url ? '<button class="di-act" data-dl-copy-idx="'+i+'">Copy URL</button>' : '') + '</div>';
       } else if (live) {
         actions = '<div class="di-actions"><button class="di-act" data-dl-pause="'+d.id+'">Pause</button><button class="di-act di-act-danger" data-dl-cancel="'+d.id+'">Cancel</button></div>';
       } else if (paused) {
-        actions = '<div class="di-actions"><button class="di-act" data-dl-resume="'+d.id+'">Resume</button><button class="di-act di-act-danger" data-dl-cancel="'+d.id+'">Cancel</button></div>';
+        actions = '<div class="di-actions">'
+          + (d.canResume !== false ? '<button class="di-act" data-dl-resume="'+d.id+'">Resume</button>' : '')
+          + '<button class="di-act di-act-danger" data-dl-cancel="'+d.id+'">Cancel</button></div>';
       } else if (failed) {
-        actions = '<div class="di-actions"><button class="di-act di-act-danger" data-dl-remove="'+d.id+'">Remove</button></div>';
+        actions = '<div class="di-actions">'
+          + (d.url ? '<button class="di-act" data-dl-retry-idx="'+i+'">Retry</button>' : '')
+          + (d.url ? '<button class="di-act" data-dl-copy-idx="'+i+'">Copy URL</button>' : '')
+          + '<button class="di-act di-act-danger" data-dl-remove="'+d.id+'">Remove</button></div>';
       }
-      return '<div class="download-item'+(done?' done':'')+(paused?' paused':'')+(failed?' failed':'')+'"><div class="di-icon">'+icon+'</div><div class="di-info"><div class="di-name">'+d.name+'</div><div class="di-status '+d.state+'">'+label+'<span class="di-meta">'+(meta.length?' \u00B7 '+meta.join(' \u00B7 '):'')+'</span></div>'+bar+actions+'</div></div>';
+      return '<div class="download-item'+(done?' done':'')+(paused?' paused':'')+(failed?' failed':'')+'"><div class="di-icon">'+icon+'</div><div class="di-info"><div class="di-name">'+_escHtml(d.name)+'</div><div class="di-status '+d.state+'">'+label+'<span class="di-meta">'+(meta.length?' \u00B7 '+meta.join(' \u00B7 '):'')+'</span></div>'+bar+actions+'</div></div>';
     }).join('');
   }
 
@@ -16292,26 +16930,35 @@
       box.innerHTML = '<div class="download-empty">No history yet</div>';
       return;
     }
-    box.innerHTML = _dlHistory.map(function(h) {
+    box.innerHTML = _dlHistory.map(function(h, i) {
       var when = '';
       try { when = new Date(h.time).toLocaleString(); } catch (e) {}
       var size = (h.size > 0) ? _fmtBytes(h.size) : '';
-      var icon = h.exists ? '\u2713' : '\u26A0';
+      var st = h.status || 'completed';
+      var isFail = st === 'failed' || st === 'cancelled';
+      var icon = (st === 'completed') ? '\u2713' : '\u26A0';
+      var statusText = (st === 'failed') ? 'Failed' : (st === 'cancelled') ? 'Cancelled' : 'Downloaded';
+      if (st === 'failed' && h.error) statusText += ' \u2014 ' + h.error;
       var meta = [when, size, _dlTypeLabel(h.ext)].filter(function(x) { return !!x; }).join(' \u00B7 ');
-      var actions;
+      var actions = '';
       if (h.exists) {
-        actions = '<div class="di-actions"><button class="di-act" data-hist-open="' + _escHtml(h.name) + '">Open</button>'
-          + '<button class="di-act" data-hist-folder="' + _escHtml(h.name) + '">Show in folder</button>'
-          + '<button class="di-act di-act-danger" data-hist-remove="' + h.time + '">Remove</button></div>';
-      } else {
-        actions = '<div class="di-actions"><button class="di-act di-act-danger" data-hist-remove="' + h.time + '">Remove</button></div>';
+        actions += '<button class="di-act" data-hist-open="' + _escHtml(h.name) + '">Open</button>'
+          + '<button class="di-act" data-hist-folder="' + _escHtml(h.name) + '">Show in folder</button>';
       }
-      return '<div class="download-item done">'
+      if (isFail && h.url) {
+        actions += '<button class="di-act" data-hist-retry-idx="' + i + '">Retry</button>';
+      }
+      if (h.url) {
+        actions += '<button class="di-act" data-hist-copy-idx="' + i + '">Copy URL</button>';
+      }
+      actions += '<button class="di-act di-act-danger" data-hist-remove="' + h.time + '">Remove</button>';
+      return '<div class="download-item done' + (isFail ? ' failed' : '') + '">'
         + '<div class="di-icon">' + icon + '</div>'
         + '<div class="di-info"><div class="di-name">' + _escHtml(h.name)
-        + (h.exists ? '' : '<span class="di-missing">File moved or deleted</span>') + '</div>'
-        + '<div class="di-status completed">Downloaded<span class="di-meta"> \u00B7 ' + _escHtml(meta) + '</span></div>'
-        + actions + '</div></div>';
+        + ((st === 'completed' && !h.exists) ? '<span class="di-missing">File moved or deleted</span>' : '') + '</div>'
+        + '<div class="di-status ' + (isFail ? 'interrupted' : 'completed') + '">' + _escHtml(statusText)
+        + '<span class="di-meta"> \u00B7 ' + _escHtml(meta) + '</span></div>'
+        + '<div class="di-actions">' + actions + '</div></div></div>';
     }).join('');
   }
   document.getElementById('downloadHistoryList').addEventListener('click', function(e) {
@@ -16321,6 +16968,19 @@
       if (window.electronAPI.openDownloadedFile) window.electronAPI.openDownloadedFile(btn.dataset.histOpen);
     } else if (btn.dataset.histFolder) {
       if (window.electronAPI.showDownloadInFolder) window.electronAPI.showDownloadInFolder(btn.dataset.histFolder);
+    } else if (btn.dataset.histRetryIdx !== undefined && btn.dataset.histRetryIdx !== '') {
+      var hrec = _dlHistory[Number(btn.dataset.histRetryIdx)];
+      if (hrec && hrec.url && window.electronAPI.retryDownload) {
+        window.electronAPI.retryDownload(hrec.url).then(function(ok) {
+          if (ok) {
+            if (window.showToast) showToast('Restarting download...', 'success');
+            loadDownloadHistory();
+          } else if (window.showToast) showToast('Could not restart download', 'error');
+        });
+      }
+    } else if (btn.dataset.histCopyIdx !== undefined && btn.dataset.histCopyIdx !== '') {
+      var hrec2 = _dlHistory[Number(btn.dataset.histCopyIdx)];
+      if (hrec2 && hrec2.url) _dlCopyUrl(hrec2.url);
     } else if (btn.dataset.histRemove) {
       if (window.electronAPI.removeDownloadHistory) {
         window.electronAPI.removeDownloadHistory(Number(btn.dataset.histRemove)).then(function() { loadDownloadHistory(); });
@@ -16355,17 +17015,48 @@
       if (window.electronAPI.openDownloadedFile) window.electronAPI.openDownloadedFile(btn.dataset.dlOpen);
     } else if (btn.dataset.dlFolder) {
       if (window.electronAPI.showDownloadInFolder) window.electronAPI.showDownloadInFolder(btn.dataset.dlFolder);
+    } else if (btn.dataset.dlRetryIdx !== undefined && btn.dataset.dlRetryIdx !== '') {
+      dl = downloads[Number(btn.dataset.dlRetryIdx)];
+      if (dl && dl.url && window.electronAPI.retryDownload) {
+        window.electronAPI.retryDownload(dl.url).then(function(ok) {
+          if (ok) { if (window.showToast) showToast('Restarting download...', 'success'); }
+          else if (window.showToast) showToast('Could not restart download', 'error');
+        });
+      }
+    } else if (btn.dataset.dlCopyIdx !== undefined && btn.dataset.dlCopyIdx !== '') {
+      dl = downloads[Number(btn.dataset.dlCopyIdx)];
+      if (dl && dl.url) _dlCopyUrl(dl.url);
     }
   });
+  function _dlCopyUrl(url) {
+    try {
+      var done = function() { if (window.showToast) showToast('URL copied', 'success'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(function() { _dlCopyUrlFallback(url, done); });
+      } else _dlCopyUrlFallback(url, done);
+    } catch(e) {}
+  }
+  function _dlCopyUrlFallback(url, done) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    } catch(e) {}
+  }
 
   var _neoActiveDownloads = {};
   function addDownload(d) {
-    downloads.unshift({ id: d.id, name: d.filename, ext: d.ext || '', total: d.totalBytes || 0, received: 0, state: 'progressing', speed: 0, remainingMs: -1 });
+    downloads.unshift({ id: d.id, name: d.filename, ext: d.ext || '', total: d.totalBytes || 0, received: 0, state: 'progressing', speed: 0, remainingMs: -1, url: d.url || '' });
     if (downloads.length > 200) downloads.length = 200;
     // Protect the tab that initiated this download from memory eviction.
     _neoActiveDownloads[d.id] = (state && typeof state.activeIdx === 'number') ? state.activeIdx : -1;
     _neoDownloadingTab = _neoActiveDownloads[d.id];
     renderDownloads();
+    // Optional: surface the panel automatically when a download starts.
+    if (_dlSettings.autoOpenPanel) _dlOpenPanel();
   }
 
   function updateDownload(d) {
@@ -16375,6 +17066,11 @@
       found.total = d.total || found.total;
       found.speed = d.speed || 0;
       found.remainingMs = (typeof d.remainingMs === 'number') ? d.remainingMs : -1;
+      // The real name may only become known after the save started (page title
+      // resolves late) or after a dedupe rename — keep the list in sync.
+      if (d.filename) found.name = d.filename;
+      if (d.url && !found.url) found.url = d.url;
+      if (typeof d.canResume === 'boolean') found.canResume = d.canResume;
       if (d.state === 'paused' || d.state === 'interrupted' || d.state === 'progressing' || d.state === 'completed' || d.state === 'cancelled') {
         found.state = d.state;
       } else {
@@ -16389,9 +17085,16 @@
     if (found) {
       var st = (d.state === 'completed') ? 'completed' : (d.state === 'interrupted') ? 'interrupted' : (d.state === 'cancelled') ? 'cancelled' : d.state;
       found.state = st;
+      // Main may have saved under a deduped name (file_1.pdf) — keep the list
+      // in sync so the Open button targets the file that actually exists.
+      if (d.filename) found.name = d.filename;
+      if (d.url && !found.url) found.url = d.url;
       if (st === 'completed') found.received = found.total;
       renderDownloads();
     }
+    // Surface failures — a silent failure looks exactly like "the download
+    // just got cancelled and nothing happened".
+    if (st === 'interrupted' && found && window.showToast) showToast('Download failed: ' + (found.name || 'file'), 'error');
     // A completed download is now in the persistent history: refresh it so the
     // popup shows the new entry even while it stays open.
     if (d.state === 'completed' && typeof loadDownloadHistory === 'function') {
@@ -19498,7 +20201,7 @@
       state.voiceMuted = true;
       state.voiceLang = data.voiceLang || '';
       state.closedTabs = data.closedTabs || [];
-      if (data.downloads) { downloads = data.downloads; renderDownloads(); }
+      if (data.downloads) { downloads = (typeof _dlRestoreList === 'function') ? _dlRestoreList(data.downloads) : data.downloads; renderDownloads(); }
       localStorage.removeItem(SAVE_KEY);
       switchTab(state.activeIdx);
     } catch(e) { alert('Failed to restore backup: ' + e.message); }
@@ -20048,6 +20751,11 @@
   document.getElementById('settingSearchEngine').addEventListener('change', function() {
     state.searchMode = this.value;
     setSearchMode(this.value);
+  });
+  document.getElementById('settingSuggestStyle').addEventListener('change', function() {
+    try { localStorage.setItem('neo_sx_style', this.value); } catch (e) {}
+    // re-mode the suggestion panel live if it's open right now
+    try { window.dispatchEvent(new Event('resize')); } catch (e) {}
   });
   document.getElementById('settingVoice').addEventListener('change', function() {
     voiceLangSelect.value = this.value;
@@ -23582,6 +24290,764 @@
   searchInput.addEventListener('input', () => { urlInput.value = searchInput.value; });
   urlInput.addEventListener('input', () => { searchInput.value = urlInput.value; });
 
+  // ===== NEXORA INTELLIGENT SEARCH POPUP ==================================
+  // One floating autocomplete panel shared by BOTH bars (homepage searchInput
+  // and navbar urlInput). It lives on <body> so homepage transforms, widgets
+  // and wallpapers can never clip it, and it plugs into the EXISTING search
+  // stack: submitQuery()/searchWeb()/navigate() do all the real work — this
+  // module only decides what to suggest and which of those to call. All
+  // listeners are registered exactly once; resize/scroll listeners only exist
+  // while the popup is open.
+  (function _sxInit() {
+    var sxA = searchInput;      // homepage bar
+    var sxB = urlInput;         // navbar omnibox
+    var api = window.electronAPI || {};
+
+    var ICON = {
+      search: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>',
+      clock: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>',
+      globe: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>',
+      spark: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 3l1.7 4.6L18.3 9.3 13.7 11 12 15.6 10.3 11 5.7 9.3 10.3 7.6z"/><path d="M18.6 14.6l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8z"/></svg>',
+      bolt: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13 2L4.5 13.5H11L9.5 22 19.5 10H13z"/></svg>',
+      go: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg>',
+      plus: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+      down: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>',
+      hist: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3 4v4.5h4.5"/><path d="M12 8v4.3l3 1.8"/></svg>',
+      gear: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"/></svg>'
+    };
+
+    var _sx = {
+      pop: null, list: null, anchor: null, open: false, sel: -1, items: [],
+      queries: [], web: [], qTs: 0, wTs: 0, qTok: 0, wTok: 0, timer: null,
+      mode: 'popup'   // 'popup' = dropdown under the bar | 'fan' = cards around it
+    };
+
+    function _sxEsc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function _sxHost(u) {
+      try { return String(new URL(String(u)).hostname).replace(/^www\./, ''); } catch (e) { return ''; }
+    }
+    function _sxAgo(ts) {
+      var d = Date.now() - (Number(ts) || 0);
+      if (d < 60000) return 'just now';
+      if (d < 3600000) return Math.floor(d / 60000) + 'm ago';
+      if (d < 86400000) return Math.floor(d / 3600000) + 'h ago';
+      if (d < 604800000) return Math.floor(d / 86400000) + 'd ago';
+      try { return new Date(ts).toLocaleDateString(); } catch (e) { return ''; }
+    }
+
+    // ---- data: loaded once per 8s window, NEVER per keystroke ----
+    function _sxEnsureData(force) {
+      var now = Date.now();
+      if (api.searchHistGet && (force || !_sx.qTs || now - _sx.qTs > 8000)) {
+        var qt = ++_sx.qTok;
+        api.searchHistGet().then(function (r) {
+          if (qt !== _sx.qTok) return;              // stale response: drop it
+          _sx.qTs = Date.now();
+          _sx.queries = (r && Array.isArray(r.items)) ? r.items : [];
+          if (_sx.open) _sxRefresh(true);
+        }).catch(function () { if (qt === _sx.qTok) _sx.qTs = Date.now(); });
+      }
+      if (api.webhistGet && (force || !_sx.wTs || now - _sx.wTs > 8000)) {
+        var wt = ++_sx.wTok;
+        api.webhistGet().then(function (rows) {
+          if (wt !== _sx.wTok) return;
+          _sx.wTs = Date.now();
+          _sx.web = Array.isArray(rows) ? rows : [];
+          if (_sx.open) _sxRefresh(true);
+        }).catch(function () { if (wt === _sx.wTok) _sx.wTs = Date.now(); });
+      }
+    }
+
+    // Recorded ONLY for text queries typed into our own bars — URLs are left
+    // to the existing browsing history, and page content/forms are never read.
+    function _sxRecord(v) {
+      try {
+        var q = String(v == null ? '' : v).trim().replace(/\s+/g, ' ');
+        if (!q || q.length > 300) return;
+        if (typeof isLikelyURL === 'function' && isLikelyURL(q)) return;
+        if (!api.searchHistLog) return;
+        api.searchHistLog(q).then(function (res) {
+          if (!res || !res.ok || !res.item) return;
+          _sx.queries = _sx.queries.filter(function (x) {
+            return String(x.id) !== String(res.item.id) && String(x.q).toLowerCase() !== res.item.q.toLowerCase();
+          });
+          _sx.queries.unshift(res.item);
+          _sx.qTs = Date.now();
+          if (_sx.open) _sxRefresh(true);
+        }).catch(function () {});
+      } catch (e) {}
+    }
+
+    // ---- suggestion model (empty bar vs typed text) ----
+    function _sxSiteRows(limit, skipHosts, minCount) {
+      var counts = {}, first = {}, i, h, host;
+      for (i = 0; i < _sx.web.length; i++) {
+        h = _sx.web[i];
+        host = _sxHost(h && h.url);
+        if (!host) continue;
+        counts[host] = (counts[host] || 0) + 1;
+        if (!first[host]) first[host] = h;
+      }
+      var out = [], seen = {};
+      if (minCount) {                       // frequently visited hosts
+        var hosts = Object.keys(counts).filter(function (x) { return counts[x] >= minCount && !(skipHosts && skipHosts[x]); })
+          .sort(function (a, b) { return counts[b] - counts[a]; });
+        for (i = 0; i < hosts.length && out.length < limit; i++) {
+          h = first[hosts[i]];
+          out.push({ id: h.id, url: h.url, title: h.title || hosts[i], host: hosts[i], ts: h.ts });
+          seen[hosts[i]] = 1;
+        }
+        return out;
+      }
+      for (i = 0; i < _sx.web.length && out.length < limit; i++) {   // most recent unique
+        h = _sx.web[i];
+        host = _sxHost(h && h.url);
+        if (!host || seen[host] || (skipHosts && skipHosts[host])) continue;
+        seen[host] = 1;
+        out.push({ id: h.id, url: h.url, title: h.title || host, host: host, ts: h.ts });
+      }
+      return out;
+    }
+
+    function _sxBuild(q) {
+      var items = [];
+      q = String(q || '').trim();
+      if (!q) {
+        var i;
+        var qs = _sx.queries.slice(0, 6);
+        for (i = 0; i < qs.length; i++) {
+          items.push({ cat: 'Recent Searches', icon: ICON.clock, t1: qs[i].q, t2: _sxAgo(qs[i].ts),
+            kind: 'q', text: qs[i].q, id: qs[i].id, rm: true });
+        }
+        var freq = _sxSiteRows(3, null, 2);
+        for (i = 0; i < freq.length; i++) {
+          items.push({ cat: 'Frequently Visited', icon: ICON.globe, t1: freq[i].title, t2: freq[i].host,
+            kind: 'u', url: freq[i].url, id: freq[i].id, rm: true });
+        }
+        var skip = {}; freq.forEach(function (s) { skip[s.host] = 1; });
+        var rec = _sxSiteRows(4, skip, 0);
+        for (i = 0; i < rec.length; i++) {
+          items.push({ cat: 'Recent Sites', icon: ICON.globe, t1: rec[i].title, t2: rec[i].host,
+            kind: 'u', url: rec[i].url, id: rec[i].id, rm: true });
+        }
+        var acts = [
+          { icon: ICON.plus, t1: 'Open a new tab', t2: 'Start something new', act: 'newtab' },
+          { icon: ICON.down, t1: 'Open Downloads', t2: 'Files you have grabbed', act: 'dl' },
+          { icon: ICON.hist, t1: 'Open History', t2: 'Every site, every day', act: 'hist' },
+          { icon: ICON.gear, t1: 'Open Settings', t2: 'Search engine, themes, downloads', act: 'set' }
+        ];
+        for (i = 0; i < acts.length; i++) {
+          items.push({ cat: 'Quick Access', icon: acts[i].icon, cls: 'sx-act', t1: acts[i].t1, t2: acts[i].t2,
+            kind: 'act', act: acts[i].act });
+        }
+        return items;
+      }
+
+      var lq = q.toLowerCase();
+      if (typeof isLikelyURL === 'function' && isLikelyURL(q)) {
+        items.push({ cat: 'Best Match', icon: ICON.go, cls: 'sx-go', t1: 'Go to ' + q,
+          t2: 'Open this address directly', kind: 'go', url: q });
+      }
+      items.push({ cat: 'Web Suggestions', icon: ICON.search, t1: 'Search the web for \u201c' + q + '\u201d',
+        t2: 'Google results', kind: 'web', text: q });
+
+      var m1 = _sx.queries.filter(function (it) {
+        var s = String(it.q || '').toLowerCase();
+        return s && s !== lq && s.indexOf(lq) !== -1;
+      }).slice(0, 4);
+      for (var a = 0; a < m1.length; a++) {
+        items.push({ cat: 'Recent Searches', icon: ICON.clock, t1: m1[a].q, t2: _sxAgo(m1[a].ts),
+          kind: 'q', text: m1[a].q, id: m1[a].id, rm: true });
+      }
+
+      var m2 = _sx.web.filter(function (h) {
+        if (!h || !h.url) return false;
+        return (String(h.url) + ' ' + String(h.title || '')).toLowerCase().indexOf(lq) !== -1;
+      }).slice(0, 5);
+      for (var b = 0; b < m2.length; b++) {
+        items.push({ cat: 'Browser History', icon: ICON.globe, t1: m2[b].title || _sxHost(m2[b].url),
+          t2: m2[b].url, kind: 'u', url: m2[b].url, id: m2[b].id, rm: true });
+      }
+
+      items.push({ cat: 'NEXORA AI', icon: ICON.spark, cls: 'sx-ai', badge: 'AI',
+        t1: 'Ask NEXORA AI about \u201c' + q + '\u201d', t2: 'Answers in the AI panel', kind: 'ai', text: q });
+      return items;
+    }
+
+    // ---- fan mode helpers ------------------------------------------------
+    function _sxBox(anchor) {
+      return (anchor && anchor.parentElement && anchor.parentElement.tagName !== 'BODY')
+        ? anchor.parentElement : anchor;
+    }
+    // The homepage bar gets the fan; the omnibox (and any window too narrow
+    // to flank with readable cards) keeps the dropdown. The user can force
+    // the classic Google dropdown for every bar in Customize → Search Style.
+    function _sxModeFor(box, vw) {
+      try {
+        var style = 'fan';
+        try { style = localStorage.getItem('neo_sx_style') || 'fan'; } catch (e2) {}
+        if (style !== 'fan') return 'popup';
+        if (_sx.anchor === sxA && box && box.getClientRects().length) {
+          var r = box.getBoundingClientRect();
+          var side = (vw - r.width) / 2;
+          if (vw >= 1040 && side >= 234) return 'fan';   // 190px card + 26 gap + slack
+        }
+      } catch (e) {}
+      return 'popup';
+    }
+    // Fan shows at most 6 cards — keep the ORIGINAL order but make sure every
+    // category still gets at least one card (Recent + Quick must both show).
+    function _sxFanPick(items) {
+      var out = [], i;
+      if (items.length <= 6) {
+        for (i = 0; i < items.length; i++) out.push({ it: items[i], i: i });
+        return out;
+      }
+      var sel = [];
+      for (i = 0; i < 6; i++) sel.push(i);
+      var have = {}, cats = [];
+      for (i = 0; i < items.length; i++) {
+        var c = items[i].cat;
+        if (have[c] === undefined) { have[c] = false; cats.push(c); }
+      }
+      for (i = 0; i < sel.length; i++) have[items[sel[i]].cat] = true;
+      for (var guard = 0; guard < 6; guard++) {
+        var missing = null;
+        for (var ci = 0; ci < cats.length; ci++) if (!have[cats[ci]]) { missing = cats[ci]; break; }
+        if (!missing) break;
+        var first = -1;
+        for (i = 0; i < items.length; i++) if (items[i].cat === missing) { first = i; break; }
+        if (first < 0 || sel.indexOf(first) !== -1) { have[missing] = true; continue; }
+        // swap with the LAST card whose category has a spare representative
+        var popAt = -1;
+        for (var s = sel.length - 1; s >= 0; s--) {
+          var cnt = 0;
+          for (var t = 0; t < sel.length; t++) if (items[sel[t]].cat === items[sel[s]].cat) cnt++;
+          if (cnt > 1) { popAt = s; break; }
+        }
+        if (popAt < 0) { have[missing] = true; break; }
+        sel.splice(popAt, 1, first);
+        have[missing] = true;
+      }
+      sel.sort(function (a, b) { return a - b; });
+      for (i = 0; i < sel.length; i++) out.push({ it: items[sel[i]], i: sel[i] });
+      return out;
+    }
+    function _sxRenderFan() {
+      var pick = _sxFanPick(_sx.items);
+      var html = '';
+      for (var j = 0; j < pick.length; j++) {
+        var i = pick[j].i, it = pick[j].it;
+        html += '<div class="sx-row ' + (it.cls || '') + '" role="option" aria-selected="false" id="sxRow' + i + '" data-i="' + i + '">' +
+          '<span class="sx-ic">' + (it.icon || ICON.search) + '</span>' +
+          '<span class="sx-tx"><span class="sx-cat">' + _sxEsc(it.cat) + '</span>' +
+          '<span class="sx-t1">' + _sxEsc(it.t1) + '</span>' +
+          (it.t2 ? '<span class="sx-t2">' + _sxEsc(it.t2) + '</span>' : '') + '</span>' +
+          (it.badge ? '<span class="sx-badge">' + _sxEsc(it.badge) + '</span>' : '') +
+          (it.rm ? '<span class="sx-x" data-rm="' + i + '" title="Remove suggestion" aria-label="Remove suggestion">&#x2715;</span>' : '') +
+          '</div>';
+      }
+      _sx.list.innerHTML = html;
+    }
+
+    function _sxRender() {
+      // Re-renders (typing, async data landing, mode switches) must NOT
+      // replay the deal-in/cards animation — only a fresh open starts it
+      // (added right after this call). Otherwise cards are mid-flight and
+      // visually overlap the bar while the user is already reading them.
+      if (_sx.list) _sx.list.classList.remove('sx-anim');
+      // Homepage fan: one card per suggestion, dealt around the bar.
+      if (_sx.mode === 'fan') { _sxRenderFan(); return; }
+      // Every category becomes its OWN floating glass card (.sx-group) with
+      // breathing room between cards. Row ids/data-i stay GLOBAL (flat index
+      // into _sx.items) so keyboard nav, ARIA and tests are untouched.
+      var html = '', lastCat = null, open = false;
+      for (var i = 0; i < _sx.items.length; i++) {
+        var it = _sx.items[i];
+        if (it.cat !== lastCat) {
+          if (open) html += '</div>';
+          var c = String(it.cls || ''), cat = String(it.cat || '');
+          var g = (c.indexOf('sx-ai') !== -1 || cat === 'NEXORA AI') ? ' sx-g-ai'
+            : (c.indexOf('sx-go') !== -1 || cat === 'Best Match') ? ' sx-g-go'
+            : (c.indexOf('sx-act') !== -1 || cat === 'Quick Access') ? ' sx-g-act'
+            : (cat === 'Frequently Visited' || cat === 'Recent Sites' || cat === 'Browser History') ? ' sx-g-go'
+            : '';
+          html += '<div class="sx-group' + g + '" role="group" aria-label="' + _sxEsc(it.cat) + '">' +
+            '<div class="sx-cat" role="presentation">' + _sxEsc(it.cat) + '</div>';
+          lastCat = it.cat;
+          open = true;
+        }
+        html += '<div class="sx-row ' + (it.cls || '') + '" role="option" aria-selected="false" id="sxRow' + i + '" data-i="' + i + '">' +
+          '<span class="sx-ic">' + (it.icon || ICON.search) + '</span>' +
+          '<span class="sx-tx"><span class="sx-t1">' + _sxEsc(it.t1) + '</span>' +
+          (it.t2 ? '<span class="sx-t2">' + _sxEsc(it.t2) + '</span>' : '') + '</span>' +
+          (it.badge ? '<span class="sx-badge">' + _sxEsc(it.badge) + '</span>' : '') +
+          (it.rm ? '<span class="sx-x" data-rm="' + i + '" title="Remove suggestion" aria-label="Remove suggestion">&#x2715;</span>' : '') +
+          '</div>';
+      }
+      if (open) html += '</div>';
+      _sx.list.innerHTML = html;
+    }
+
+    function _sxSyncAria() {
+      var id = (_sx.open && _sx.sel >= 0) ? 'sxRow' + _sx.sel : '';
+      for (var k = 0; k < 2; k++) {
+        try {
+          var el = k ? sxB : sxA;
+          el.setAttribute('aria-haspopup', 'listbox');
+          el.setAttribute('aria-expanded', _sx.open ? 'true' : 'false');
+          el.setAttribute('aria-controls', 'sxPopList');
+          if (id) el.setAttribute('aria-activedescendant', id);
+          else el.removeAttribute('aria-activedescendant');
+        } catch (e) {}
+      }
+    }
+
+    function _sxHighlight(i) {
+      _sx.sel = i;
+      var rows = _sx.list.querySelectorAll('.sx-row');
+      for (var k = 0; k < rows.length; k++) {
+        var on = (k === i);
+        rows[k].classList.toggle('sx-sel', on);
+        rows[k].setAttribute('aria-selected', on ? 'true' : 'false');
+        if (on) { try { rows[k].scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+      }
+      _sxSyncAria();
+    }
+
+    function _sxMove(dir) {
+      var n = _sx.items.length;
+      if (!n) return;
+      var i = _sx.sel;
+      i = (i < 0) ? (dir > 0 ? 0 : n - 1) : i + dir;
+      if (i < 0) i = n - 1;
+      if (i >= n) i = 0;
+      _sxHighlight(i);
+    }
+
+    // ---- placement: match the BAR's visual box (the whole form/url-bar, not
+    // just the inner input), flip above when there is no room below ----
+    function _sxPlace() {
+      if (!_sx.open || !_sx.pop || !_sx.anchor) return;
+      try {
+        var box = _sxBox(_sx.anchor);
+        var r = box.getBoundingClientRect();
+        // remember the box we placed against — the watcher below re-places
+        // if the bar itself moves afterwards (homepage entrance animation,
+        // widgets settling in) so the fan never points at a stale position
+        _sx.watchR = { l: r.left, t: r.top, w: r.width, h: r.height };
+        var vw = document.documentElement.clientWidth;
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        // live re-mode: resize across the fan threshold (or move to the
+        // omnibox) and the panel switches form without closing
+        var want = _sxModeFor(box, vw);
+        if (want !== _sx.mode) {
+          _sx.mode = want;
+          _sx.pop.classList.toggle('sx-fan', want === 'fan');
+          _sxRefresh(true);
+          return;
+        }
+        if (_sx.mode === 'fan') { _sxFanPlace(box, r, vw, vh); return; }
+        // dropdown: clear any fan-mode inline positioning first
+        var foot0 = _sx.pop.querySelector('.sx-foot');
+        if (foot0) { foot0.style.left = ''; foot0.style.top = ''; foot0.style.width = ''; foot0.style.bottom = ''; }
+        var w = Math.round(r.width);
+        if (w < 280) w = Math.min(560, Math.max(280, vw - 32));
+        var left = Math.round(r.left);
+        if (left + w > vw - 8) left = Math.max(8, vw - w - 8);
+        if (left < 8) left = 8;
+        _sx.pop.style.left = left + 'px';
+        _sx.pop.style.width = w + 'px';
+
+        var list = _sx.list;
+        var st = list.scrollTop;                    // keep the user's place
+        list.style.maxHeight = 'none';              // measure full height first
+        var listFull = list.offsetHeight || 200;
+        var footEl = _sx.pop.querySelector('.sx-foot');
+        var footH = footEl ? footEl.offsetHeight : 0;
+        var below = vh - r.bottom - 16;      // 14px float + breathing room
+        var above = r.top - 16;
+        var cap = Math.max(160, Math.min(460, Math.round(vh * 0.6)));
+        var up = false, maxH, room;
+        if (below >= Math.min(listFull + footH, 230) || below >= above) {
+          // the WHOLE panel (list + footer) must fit in the room below the bar
+          room = below - footH;
+          maxH = Math.min(listFull, room, cap);
+          if (maxH < Math.min(150, room)) maxH = Math.min(150, room);
+          _sx.pop.classList.remove('sx-up');
+          _sx.pop.style.top = Math.round(r.bottom + 14) + 'px';   // DETACHED float
+          _sx.pop.style.bottom = 'auto';
+        } else {
+          up = true;
+          room = above - footH;
+          maxH = Math.min(listFull, room, cap);
+          if (maxH < Math.min(150, room)) maxH = Math.min(150, room);
+          _sx.pop.classList.add('sx-up');
+          _sx.pop.style.top = 'auto';
+          _sx.pop.style.bottom = Math.round(vh - r.top + 14) + 'px';
+        }
+        list.style.maxHeight = Math.max(40, maxH) + 'px';
+        list.scrollTop = st;                       // expansion above clamped it
+        if (up !== _sx.up) _sx.up = up;
+      } catch (e) {}
+    }
+
+    // ---- fan placement: cards flank the bar (3 left / 3 right), gently
+    // rotated around it like a spread hand; footer pill centred below it ----
+    function _sxFanPlace(box, r, vw, vh) {
+      var pop = _sx.pop, list = _sx.list;
+      pop.classList.remove('sx-up');
+      pop.style.left = '0px';
+      pop.style.top = '0px';
+      pop.style.width = '100%';
+      pop.style.bottom = 'auto';
+      list.style.maxHeight = 'none';
+      var foot = pop.querySelector('.sx-foot');
+      var rows = list.querySelectorAll('.sx-row');
+      var n = rows.length;
+      var gap = 26, pad = 14;
+      var cy = r.top + r.height / 2;
+      var cardH = n ? (rows[0].offsetHeight || 76) : 76;
+      var pitch = cardH + 14;
+      // The bar is NOT always centred (widgets / entrance layout can push it
+      // to one side), so measure the room EACH side really has and size that
+      // side's cards to fit — never clamp a card back over the bar.
+      var leftRoom = r.left - pad;               // px free to the bar's left
+      var rightRoom = vw - r.right - pad;        // px free to the bar's right
+      var MIN = 150;                             // smallest readable card
+      var leftN, rightN;
+      if (leftRoom < MIN && rightRoom >= MIN) { leftN = 0; rightN = n; }
+      else if (rightRoom < MIN && leftRoom >= MIN) { leftN = n; rightN = 0; }
+      else { leftN = Math.ceil(n / 2); rightN = n - leftN; }
+      function colW(cnt, room) {                 // card width that FITS a side
+        if (!cnt) return 0;
+        var w = Math.round(Math.min(300, room - gap));
+        if (w < MIN) w = Math.round(Math.min(MIN, room - 8));
+        return Math.max(90, w);
+      }
+      var lw = colW(leftN, leftRoom);
+      var rw = colW(rightN, rightRoom);
+      for (var i = 0; i < n; i++) {
+        var row = rows[i];
+        var col = i < leftN ? 0 : 1;
+        var ri = col === 0 ? i : i - leftN;
+        var k = col === 0 ? leftN : rightN;
+        var cardW = col === 0 ? lw : rw;
+        var rel = k > 1 ? (ri - (k - 1) / 2) : 0;
+        var rot = (col === 0 ? -rel : rel) * 3.5;         // tangent to the arc
+        var arc = Math.abs(rel) * 12;                     // outer cards tuck in
+        var top = Math.round(cy - cardH / 2 + rel * pitch);
+        if (top < pad) top = pad;
+        if (top + cardH > vh - pad) top = Math.round(vh - pad - cardH);
+        var left = (col === 0)
+          ? Math.round(r.left - gap - cardW + arc)
+          : Math.round(r.right + gap - arc);
+        if (left < pad) left = pad;                       // stay on-screen…
+        var maxL = vw - pad - cardW;
+        if (left > maxL) left = maxL;                     // …but not off-screen
+        row.style.position = 'absolute';
+        row.style.width = cardW + 'px';
+        row.style.left = left + 'px';
+        row.style.top = top + 'px';
+        row.style.setProperty('--rot', rot.toFixed(2) + 'deg');
+        row.style.setProperty('--fan-dx', (col === 0 ? 34 : -34) + 'px');
+        row.style.transform = 'rotate(' + rot.toFixed(2) + 'deg)';
+      }
+      if (foot) {
+        foot.style.left = Math.round(r.left) + 'px';
+        foot.style.width = Math.round(r.width) + 'px';
+        foot.style.top = Math.round(r.bottom + 14) + 'px';
+        foot.style.bottom = 'auto';
+      }
+    }
+
+    // The popup's own list scroll must NOT re-run placement (measuring
+    // expands the list for a tick, which would clamp scrollTop to 0 and make
+    // the wheel feel dead). Page scrolls still re-anchor the panel.
+    function _sxOnScroll(e) {
+      if (_sx.list && e && e.target === _sx.list) return;
+      _sxPlace();
+    }
+
+    // Viewport changes get an immediate pass PLUS a delayed confirmation
+    // pass — a resize event can arrive before the layout reports the new
+    // width, and without the second pass the panel would keep stale geometry.
+    function _sxOnResize() {
+      _sxPlace();
+      if (_sx.reT) { clearTimeout(_sx.reT); _sx.reT = null; }
+      _sx.reT = setTimeout(function () { _sx.reT = null; _sxPlace(); }, 180);
+    }
+
+    function _sxRefresh(keepSel) {
+      if (!_sx.pop) return;
+      var q = String((_sx.anchor && _sx.anchor.value) || '').trim();
+      _sx.items = _sxBuild(q);
+      if (!keepSel) _sx.sel = -1;
+      else if (_sx.sel >= _sx.items.length) _sx.sel = -1;
+      _sxRender();
+      if (_sx.sel >= 0) _sxHighlight(_sx.sel);
+      _sxPlace();
+      _sxSyncAria();
+    }
+
+    function _sxOpenNow(anchor) {
+      var fresh = !_sx.open;          // stagger only on a real closed -> open
+      if (!_sx.pop) _sxCreate();
+      _sx.anchor = anchor;
+      _sx.open = true;
+      _sx.sel = -1;
+      _sx.mode = _sxModeFor(_sxBox(anchor), document.documentElement.clientWidth);
+      _sx.pop.classList.toggle('sx-fan', _sx.mode === 'fan');
+      _sxRefresh();
+      _sx.pop.classList.add('sx-open');
+      if (fresh) {
+        // staggered spring-in of the glass cards (gated by .sx-anim so
+        // re-renders while typing never replay the entrance)
+        if (_sx.animT) { clearTimeout(_sx.animT); _sx.animT = null; }
+        _sx.list.classList.remove('sx-anim');
+        void _sx.list.offsetWidth;    // force reflow so the animation restarts
+        _sx.list.classList.add('sx-anim');
+        _sx.animT = setTimeout(function () {
+          _sx.animT = null;
+          if (_sx.list) _sx.list.classList.remove('sx-anim');
+        }, 750);
+      }
+      _sxSyncAria();
+      window.addEventListener('resize', _sxOnResize);
+      document.addEventListener('scroll', _sxOnScroll, true);
+      // keep the panel glued to the bar even if the page moves the bar
+      if (_sx.watchT) { clearInterval(_sx.watchT); _sx.watchT = null; }
+      _sx.watchT = setInterval(function () {
+        if (!_sx.open || !_sx.anchor || !_sx.watchR) return;
+        try {
+          var r2 = _sxBox(_sx.anchor).getBoundingClientRect();
+          var w0 = _sx.watchR;
+          if (Math.abs(r2.left - w0.l) >= 2 || Math.abs(r2.top - w0.t) >= 2 ||
+              Math.abs(r2.width - w0.w) >= 2 || Math.abs(r2.height - w0.h) >= 2) {
+            _sxPlace();
+          }
+        } catch (e) {}
+      }, 120);
+      _sxEnsureData();
+    }
+
+    function _sxClose() {
+      if (!_sx.open) return;
+      _sx.open = false;
+      _sx.sel = -1;
+      if (_sx.timer) { clearTimeout(_sx.timer); _sx.timer = null; }
+      if (_sx.animT) { clearTimeout(_sx.animT); _sx.animT = null; }
+      if (_sx.reT) { clearTimeout(_sx.reT); _sx.reT = null; }
+      if (_sx.watchT) { clearInterval(_sx.watchT); _sx.watchT = null; }
+      _sx.watchR = null;
+      if (_sx.pop) {
+        _sx.pop.classList.remove('sx-open');
+        _sx.list.classList.remove('sx-anim');
+      }
+      window.removeEventListener('resize', _sxOnResize);
+      document.removeEventListener('scroll', _sxOnScroll, true);
+      _sxSyncAria();
+    }
+
+    // ---- actions ----
+    function _sxAction(act) {
+      var map = { newtab: 'newTabBtn', dl: 'vDownloadsBtn', hist: 'vHistoryBtn', set: 'vSettingsBtn' };
+      try {
+        var el = map[act] && document.getElementById(map[act]);
+        if (el) el.click();     // same button the user would press — one code path
+      } catch (e) {}
+    }
+
+    function _sxAI(text) {
+      if (!text) return;
+      try {
+        var panel = document.getElementById('aiPanel');
+        var tgl = document.getElementById('aiPanelToggle');
+        if (panel && panel.classList.contains('minimized') && tgl) tgl.click();
+        var inp = document.getElementById('apInput');
+        var btn = document.getElementById('apSendBtn');
+        if (inp && btn) {
+          inp.value = text;     // the original query stays visible in the panel
+          btn.click();          // existing AI send pipeline (apSendMsg)
+          return;
+        }
+        var saved = state.searchMode;   // fallback: ESTA chat, wake-word style
+        state.searchMode = 'esta';
+        Promise.resolve().then(function () { return handleSearch(text); })
+          .then(function () { state.searchMode = saved; })
+          .catch(function () { state.searchMode = saved; });
+      } catch (e) {}
+    }
+
+    function _sxActivate(it) {
+      if (!it) return;
+      _sxClose();
+      try {
+        if (it.kind === 'go' || it.kind === 'u') { navigate(it.url); return; }
+        if (it.kind === 'web') { _sxRecord(it.text); searchWeb(it.text); return; }
+        if (it.kind === 'q') { _sxRecord(it.text); submitQuery(it.text); return; }
+        if (it.kind === 'ai') { _sxRecord(it.text); _sxAI(it.text); return; }
+        if (it.kind === 'act') { _sxAction(it.act); return; }
+      } catch (e) {}
+    }
+
+    function _sxRemove(i) {
+      var it = _sx.items[i];
+      if (!it || !it.rm) return;
+      try {
+        if (it.kind === 'q') {
+          _sx.queries = _sx.queries.filter(function (x) { return String(x.id) !== String(it.id); });
+          if (api.searchHistDel) api.searchHistDel(it.id).catch(function () {});
+        } else if (it.kind === 'u') {
+          _sx.web = _sx.web.filter(function (x) { return String(x.id) !== String(it.id); });
+          if (api.webhistDel) api.webhistDel(it.id).catch(function () {});
+        }
+      } catch (e) {}
+      _sxRefresh(true);
+    }
+
+    function _sxClearHist() {
+      if (!api.searchHistClear) return;
+      api.searchHistClear().then(function () {
+        _sx.queries = [];
+        _sx.qTs = Date.now();
+        if (window.showToast) showToast('Search history cleared', 'success');
+        if (_sx.open) _sxRefresh(true);
+      }).catch(function () {});
+    }
+
+    function _sxCreate() {
+      var pop = document.createElement('div');
+      pop.className = 'sx-pop';
+      pop.id = 'sxPop';
+      var list = document.createElement('div');
+      list.className = 'sx-list';
+      list.id = 'sxPopList';
+      list.setAttribute('role', 'listbox');
+      list.setAttribute('aria-label', 'Search suggestions');
+      var foot = document.createElement('div');
+      foot.className = 'sx-foot';
+      foot.innerHTML = '<span><kbd>&#x2191;</kbd><kbd>&#x2193;</kbd> move &nbsp; <kbd>Enter</kbd> open &nbsp; <kbd>Esc</kbd> close</span>' +
+        '<button type="button" class="sx-clear">Clear search history</button>';
+      pop.appendChild(list);
+      pop.appendChild(foot);
+      document.body.appendChild(pop);
+      _sx.pop = pop;
+      _sx.list = list;
+      try { void pop.offsetHeight; } catch (e) {}   // settle closed style → first open animates
+
+      foot.querySelector('.sx-clear').addEventListener('click', _sxClearHist);
+      // Keep focus in the bar while the pointer explores rows (no blur/refocus
+      // flicker); the click below still fires normally.
+      pop.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      pop.addEventListener('mouseover', function (e) {
+        var row = e.target && e.target.closest ? e.target.closest('.sx-row') : null;
+        if (!row) return;
+        var i = Number(row.getAttribute('data-i'));
+        if (!isNaN(i) && i !== _sx.sel) _sxHighlight(i);
+      });
+      pop.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var rm = t.closest('.sx-x');
+        if (rm) { e.preventDefault(); e.stopPropagation(); _sxRemove(Number(rm.getAttribute('data-rm'))); return; }
+        var row = t.closest('.sx-row');
+        if (!row) return;
+        var i = Number(row.getAttribute('data-i'));
+        if (!isNaN(i)) _sxActivate(_sx.items[i]);
+      });
+    }
+
+    function _sxOnInput(anchor) {
+      _sx.anchor = anchor;
+      if (!_sx.open) { _sxOpenNow(anchor); return; }
+      if (_sx.timer) clearTimeout(_sx.timer);
+      _sx.timer = setTimeout(function () { _sx.timer = null; _sxRefresh(); }, 90);  // debounced filter
+    }
+
+    function _sxFocusOut() {
+      setTimeout(function () {
+        if (!_sx.open) return;
+        var a = document.activeElement;
+        if (a === sxA || a === sxB) { if (_sx.anchor !== a) { _sx.anchor = a; _sxRefresh(true); } return; }
+        if (_sx.pop && _sx.pop.contains(a)) return;
+        _sxClose();
+      }, 0);
+    }
+
+    // ---- keyboard: document-capture so the existing Enter handlers keep
+    // running untouched unless we actually consume the key ----
+    function _sxKeyDown(e) {
+      if (e.isComposing) return;
+      var t = e.target;
+      if (e.key === 'Escape') {
+        if (_sx.open) { e.preventDefault(); e.stopPropagation(); _sxClose(); }
+        return;
+      }
+      var anchor = (t === sxA) ? sxA : (t === sxB ? sxB : null);
+      if (!anchor) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;   // Ctrl+A & friends stay native
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!_sx.open) { _sxOpenNow(anchor); _sxMove(1); }
+        else _sxMove(e.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'Enter') {
+        if (_sx.open && _sx.sel >= 0 && _sx.items[_sx.sel]) {
+          e.preventDefault();
+          e.stopPropagation();
+          _sxActivate(_sx.items[_sx.sel]);
+          return;
+        }
+        _sxRecord(anchor.value);          // completed search → remember it
+        if (_sx.open) _sxClose();
+        return;                           // fall through: normal submit path
+      }
+      if (e.key === 'Tab' && _sx.open) _sxClose();
+    }
+
+    // ---- wiring (once) ----
+    sxA.addEventListener('focus', function () { _sxOpenNow(sxA); });
+    sxB.addEventListener('focus', function () { _sxOpenNow(sxB); });
+    sxA.addEventListener('click', function () { if (!_sx.open) _sxOpenNow(sxA); });
+    sxB.addEventListener('click', function () { if (!_sx.open) _sxOpenNow(sxB); });
+    sxA.addEventListener('input', function () { _sxOnInput(sxA); });
+    sxB.addEventListener('input', function () { _sxOnInput(sxB); });
+    sxA.addEventListener('focusout', _sxFocusOut);
+    sxB.addEventListener('focusout', _sxFocusOut);
+    document.addEventListener('keydown', _sxKeyDown, true);
+    document.addEventListener('mousedown', function (e) {
+      if (!_sx.open) return;
+      var t = e.target;
+      if (_sx.pop && _sx.pop.contains(t)) return;
+      if (_sx.anchor && (_sx.anchor === t || (_sx.anchor.parentElement && _sx.anchor.parentElement.contains(t)))) return;
+      _sxClose();
+    }, true);
+
+    // ---- settings: "Remember my searches" toggle (main-side flag) ----
+    (function _sxWireSettings() {
+      var el = document.getElementById('searchHistToggle');
+      if (!el) return;
+      if (api.searchHistGet) {
+        api.searchHistGet().then(function (r) { if (r) el.checked = r.enabled !== false; }).catch(function () {});
+      }
+      el.addEventListener('change', function () {
+        if (!api.searchHistSetEnabled) return;
+        api.searchHistSetEnabled(el.checked).then(function () {
+          _sx.queries = [];
+          _sx.qTs = Date.now();
+          if (window.showToast) showToast(el.checked ? 'Search history recording is on' : 'Search history cleared \u2014 recording is off', 'success');
+          if (_sx.open) _sxRefresh(true);
+        }).catch(function () {});
+      });
+    })();
+  })();
+
   // ===== ZOOM (Google Chrome style) =====
   var zoomPct = document.getElementById('zoomPct');
   var lastZoomFactor = 1.0;
@@ -24206,8 +25672,15 @@
       }).catch(function() { _vtabShotBusy = false; });
     } catch(e) { _vtabShotBusy = false; }
   }
+  // PERF: this used to capturePage() the live page every 4s forever (a GPU
+  // readback + base64 + canvas downscale), even with the tab-preview popup
+  // closed — pure burn during page loads. The shots only feed the tab-preview
+  // thumbnails, and _vtabPreviewShow already snaps the active tab on demand when
+  // the popup opens, so we only refresh while the popup is actually visible.
   setInterval(function() {
     try {
+      var _vp = document.getElementById('vtabPreview');
+      if (!_vp || !_vp.classList.contains('visible')) return;   // popup closed → skip
       _vtabSnapActive();
       Object.keys(_vtabShots).forEach(function(k) {
         if (!state.tabs[+k]) delete _vtabShots[k];
@@ -27467,6 +28940,166 @@ else setInterval(function () { oaiRefresh(true); }, 8000);
     }
   });
 
+  // ===== DOWNLOAD ACTIONS (right-side panel) =====
+  // "Save as PDF" captures whatever the viewer is currently displaying — this
+  // is how protected document viewers (Scribd-style pages) are kept, since the
+  // original file itself is never directly downloadable there. "Download File"
+  // hands a direct file link to the download manager (same path, history and
+  // notifications as any other download).
+  var apDlActions = document.getElementById('apDlActions');
+  if (apDlActions) {
+    apDlActions.addEventListener('click', function(e) {
+      var btn = e.target.closest('.ap-dl-btn');
+      if (!btn) return;
+      if (btn.id === 'apSavePdfBtn') apSavePageAsPdf(btn);
+      else if (btn.id === 'apSaveWordBtn') apSavePageAsWord(btn);
+      else if (btn.id === 'apDlFileBtn') apDownloadCurrentFile(btn);
+    });
+  }
+  // The visible page is the active tab's <webview>; pass its webContents id so
+  // the main process can act on exactly that page (never the browser UI).
+  function _dlActiveWcId() {
+    try {
+      var wv = (typeof siteWebview !== 'undefined' && siteWebview && siteWebview.isConnected) ? siteWebview : null;
+      if (!wv && typeof _tabWvs !== 'undefined' && _tabWvs && state && state.activeIdx != null && _tabWvs[state.activeIdx] && _tabWvs[state.activeIdx].isConnected) {
+        wv = _tabWvs[state.activeIdx];
+      }
+      if (wv && typeof wv.getWebContentsId === 'function') {
+        var id = wv.getWebContentsId();
+        return (typeof id === 'number' && id > 0) ? id : null;
+      }
+    } catch (e) {}
+    return null;
+  }
+  // One-click "grab what's showing" button in the right vertical toolbar
+  // (right under the Downloads arrow). Direct file pages download the real
+  // file through the download manager; anything else (document viewers like
+  // Scribd) is captured as a PDF of the pages currently displayed.
+  var vSavePdfBtn = document.getElementById('vSavePdfBtn');
+  if (vSavePdfBtn) vSavePdfBtn.addEventListener('click', function() { apGrabPageFile(vSavePdfBtn); });
+  // Same one-click grab, but the result is an editable Word (.docx) file.
+  var vSaveWordBtn = document.getElementById('vSaveWordBtn');
+  if (vSaveWordBtn) vSaveWordBtn.addEventListener('click', function() { apGrabPageWord(vSaveWordBtn); });
+  async function apGrabPageWord(btn) {
+    if (!isElectron || !window.electronAPI || !window.electronAPI.savePageAsWord) {
+      if (window.showToast) showToast('This only works in the desktop app', 'error');
+      return;
+    }
+    if (btn) btn.classList.add('busy');
+    try {
+      var wcId = _dlActiveWcId();
+      // Sitting on a real Word file? Then the untouched original is the right
+      // answer — download it. Everything else (articles, doc viewers) gets
+      // converted from what is currently displayed into a fresh .docx.
+      var curUrl = '';
+      try { curUrl = (typeof siteWebview !== 'undefined' && siteWebview) ? String(siteWebview.getURL() || '') : ''; } catch (e) {}
+      var isDocUrl = /\.(docx?|docm|dotx?|rtf)($|[?#])/i.test(curUrl);
+      var res = null;
+      if (isDocUrl && window.electronAPI.downloadCurrentFile) res = await window.electronAPI.downloadCurrentFile(wcId);
+      if (!(res && res.ok)) res = await window.electronAPI.savePageAsWord(wcId);
+      if (res && res.ok) {
+        var msg = res.name ? ('Word file saved: ' + res.name) : 'Download started \u2014 track it in the Downloads panel';
+        if (window.showToast) showToast(msg, 'success');
+        if (typeof loadDownloadHistory === 'function') loadDownloadHistory();
+        if (res.name && typeof _dlOpenPanel === 'function' && (!window._dlSettings || _dlSettings.autoOpenPanel !== false)) _dlOpenPanel();
+      } else {
+        if (window.showToast) showToast((res && res.error) || 'Could not save this page as Word', 'error');
+      }
+    } catch (err) {
+      if (window.showToast) showToast('Could not save this page as Word', 'error');
+    }
+    if (btn) btn.classList.remove('busy');
+  }
+  // "Save as Word" from the AI panel: the page currently on screen, written
+  // out as an editable .docx in the download folder.
+  async function apSavePageAsWord(btn) {
+    if (!isElectron || !window.electronAPI || !window.electronAPI.savePageAsWord) {
+      if (window.showToast) showToast('Word saving only works in the desktop app', 'error');
+      return;
+    }
+    if (btn) btn.classList.add('busy');
+    try {
+      var res = await window.electronAPI.savePageAsWord(_dlActiveWcId());
+      if (res && res.ok) {
+        if (window.showToast) showToast('Word file saved: ' + res.name, 'success');
+        if (typeof loadDownloadHistory === 'function') loadDownloadHistory();
+        if (typeof _dlOpenPanel === 'function' && (!window._dlSettings || _dlSettings.autoOpenPanel !== false)) _dlOpenPanel();
+      } else {
+        if (window.showToast) showToast((res && res.error) || 'Could not save as Word', 'error');
+      }
+    } catch (err) {
+      if (window.showToast) showToast('Could not save as Word', 'error');
+    }
+    if (btn) btn.classList.remove('busy');
+  }
+  async function apGrabPageFile(btn) {
+    if (!isElectron || !window.electronAPI) {
+      if (window.showToast) showToast('This only works in the desktop app', 'error');
+      return;
+    }
+    if (btn) btn.classList.add('busy');
+    try {
+      var wcId = _dlActiveWcId();
+      var res = null;
+      if (window.electronAPI.downloadCurrentFile) res = await window.electronAPI.downloadCurrentFile(wcId);
+      if (res && res.ok) {
+        if (window.showToast) showToast('Download started — track it in the Downloads panel', 'success');
+      } else {
+        var res2 = window.electronAPI.savePageAsPdf ? await window.electronAPI.savePageAsPdf(wcId) : null;
+        if (res2 && res2.ok) {
+          if (window.showToast) showToast('PDF saved: ' + res2.name, 'success');
+          if (typeof loadDownloadHistory === 'function') loadDownloadHistory();
+          if (typeof _dlOpenPanel === 'function' && (!window._dlSettings || _dlSettings.autoOpenPanel !== false)) _dlOpenPanel();
+        } else {
+          if (window.showToast) showToast((res2 && res2.error) || 'Could not save this page', 'error');
+        }
+      }
+    } catch (err) {
+      if (window.showToast) showToast('Could not save this page', 'error');
+    }
+    if (btn) btn.classList.remove('busy');
+  }
+  async function apSavePageAsPdf(btn) {
+    if (!isElectron || !window.electronAPI || !window.electronAPI.savePageAsPdf) {
+      if (window.showToast) showToast('PDF saving only works in the desktop app', 'error');
+      return;
+    }
+    if (btn) btn.classList.add('busy');
+    try {
+      var res = await window.electronAPI.savePageAsPdf(_dlActiveWcId());
+      if (res && res.ok) {
+        if (window.showToast) showToast('PDF saved: ' + res.name, 'success');
+        if (typeof loadDownloadHistory === 'function') loadDownloadHistory();
+        if (typeof _dlOpenPanel === 'function' && (!window._dlSettings || _dlSettings.autoOpenPanel !== false)) _dlOpenPanel();
+      } else {
+        if (window.showToast) showToast((res && res.error) || 'Could not save PDF', 'error');
+      }
+    } catch (err) {
+      if (window.showToast) showToast('Could not save PDF', 'error');
+    }
+    if (btn) btn.classList.remove('busy');
+  }
+  async function apDownloadCurrentFile(btn) {
+    if (!isElectron || !window.electronAPI || !window.electronAPI.downloadCurrentFile) {
+      if (window.showToast) showToast('Downloading only works in the desktop app', 'error');
+      return;
+    }
+    if (btn) btn.classList.add('busy');
+    try {
+      var res = await window.electronAPI.downloadCurrentFile(_dlActiveWcId());
+      if (res && res.ok) {
+        if (window.showToast) showToast('Download started', 'success');
+      } else if (res && res.error === 'notfile') {
+        if (window.showToast) showToast('This page is not a direct file. Use "Save as PDF" to keep it.', 'error');
+      } else {
+        if (window.showToast) showToast((res && res.error) || 'Could not start download', 'error');
+      }
+    } catch (err) {
+      if (window.showToast) showToast('Could not start download', 'error');
+    }
+    if (btn) btn.classList.remove('busy');
+  }
+
   apImageUpload.addEventListener('change', function() {
     var file = apImageUpload.files[0];
     if (!file) return;
@@ -29620,7 +31253,7 @@ else setInterval(function () { oaiRefresh(true); }, 8000);
       state.voiceMuted = savedSession.voiceMuted !== undefined ? savedSession.voiceMuted : true;
       state.voiceLang = savedSession.voiceLang || '';
       state.closedTabs = savedSession.closedTabs || [];
-      if (savedSession.downloads) { downloads = savedSession.downloads; renderDownloads(); }
+      if (savedSession.downloads) { downloads = (typeof _dlRestoreList === 'function') ? _dlRestoreList(savedSession.downloads) : savedSession.downloads; renderDownloads(); }
       if (savedSession.settings) _acctApplyAllSettings(savedSession.settings);
       localStorage.removeItem(SAVE_KEY);
       switchTab(state.activeIdx);
@@ -29874,7 +31507,7 @@ else setInterval(function () { oaiRefresh(true); }, 8000);
     state.voiceMuted = data.voiceMuted !== undefined ? data.voiceMuted : true;
     state.voiceLang = data.voiceLang || '';
     state.closedTabs = data.closedTabs || [];
-    if (data.downloads && typeof downloads !== 'undefined') { downloads = data.downloads; if (typeof renderDownloads === 'function') renderDownloads(); }
+    if (data.downloads && typeof downloads !== 'undefined') { downloads = (typeof _dlRestoreList === 'function') ? _dlRestoreList(data.downloads) : data.downloads; if (typeof renderDownloads === 'function') renderDownloads(); }
     // Restore all settings
     if (data.settings) _acctApplyAllSettings(data.settings);
     // Restore password vault + site categories
@@ -34103,6 +35736,7 @@ visionStatus.textContent = dynamicStatuses[0];
   setSearchMode(state.searchMode);
   document.getElementById('settingRgbStrips').value = localStorage.getItem('neo_rgb_strips') || 'off';
   document.getElementById('settingBeatStyle').value = localStorage.getItem('neo_beat_style') || 'edge';
+  document.getElementById('settingSuggestStyle').value = localStorage.getItem('neo_sx_style') || 'fan';
   syncRgbStrips();
   // Fullscreen change listeners
   document.addEventListener('fullscreenchange', function() {

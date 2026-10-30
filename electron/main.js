@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, WebContentsView, ipcMain, session, webContents, dialog, shell, Menu, protocol, net, desktopCapturer, powerMonitor, components, nativeTheme } = require('electron');
+const { app, BrowserWindow, BrowserView, WebContentsView, ipcMain, session, webContents, dialog, shell, Menu, protocol, net, desktopCapturer, powerMonitor, components, nativeTheme, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -3864,28 +3864,25 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
   // Force the host window to re-request frames from the <webview> guest. Used by
   // the black-webview watchdog after a same-guest reset, to re-establish the
   // compositor link between host and guest without recreating the guest.
+  // PERF/FLICKER: this used to resize the whole window +1px and restore it after
+  // 80ms, which produced a visible jump on every load. The root cause it worked
+  // around (hardware overlay planes dropping the guest surface) is fixed in this
+  // build, so we only ask for a repaint — cheap, and no window movement.
   ipcMain.on('neo-kick-compositor', (event) => {
     try {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win || win.isDestroyed()) return;
       win.webContents.invalidate();
-      const [w, h] = win.getSize();
-      if (w > 120 && h > 80) {
-        win.setSize(w + 1, h);
-        setTimeout(() => { try { if (!win.isDestroyed()) win.setSize(w, h); } catch (e) {} }, 80);
-      }
     } catch (e) {}
   });
 
   // TEMP diagnostic: renderer pushes navigation-timing traces; append to a file.
-  const fsNav = require('fs');
-  const _navLogPath = 'C:\\Users\\Admin\\AppData\\Local\\Temp\\opencode\\nav_trace.log';
-  function _navLog(line) {
-    try { fsNav.appendFileSync(_navLogPath, '[' + new Date().toISOString().slice(11, 23) + '] ' + line + '\n'); } catch (_) {}
-  }
-  ipcMain.on('neo-navtrace', (e, line) => {
-    _navLog(line);
-  });
+  // REMOVED (perf): the renderer no longer emits neo-navtrace, and the old sink
+  // did a synchronous appendFileSync on the main thread several times per
+  // navigation. The IPC handler is dropped so a stray send can never stall us.
+  // _navLog is kept as a no-op because the download diagnostics below still call
+  // it; making it free (no disk I/O) removes a per-download stall too.
+  function _navLog(line) { /* intentionally empty (perf) */ }
   // Report whether Chromium is compositing in software (no hardware GPU / SwiftShader).
   // The renderer uses this to auto-enable performance-mode and drop decorative
   // animations that would otherwise spin the software compositor at full CPU.
@@ -4107,18 +4104,98 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
       fs.writeFileSync(f, JSON.stringify(list.slice(0, 200)));
     } catch(e) {}
   }
-  function _dlRecordHistory(rec) {
+  function _dlRecordHistory(rec, status, errMsg) {
     try {
+      var st = status || 'completed';
       var size = rec.totalBytes || 0;
-      try { var st = fs.statSync(rec.finalPath); if (st && st.isFile()) size = st.size; } catch(e) {}
+      if (st === 'completed') {
+        try { var s2 = fs.statSync(rec.finalPath); if (s2 && s2.isFile()) size = s2.size; } catch(e) {}
+      }
       var list = _dlReadHistory();
       list.unshift({
-        name: rec.filename, path: rec.finalPath,
+        name: rec.filename, path: st === 'completed' ? rec.finalPath : '',
         url: rec.sourceUrl || '', size: size, ext: rec.ext || '',
-        time: Date.now()
+        time: Date.now(), status: st, error: errMsg ? String(errMsg).slice(0, 300) : ''
       });
       _dlWriteHistory(list);
     } catch(e) {}
+  }
+  // ===== DOWNLOAD SETTINGS (main-side, persisted) =====
+  // Renderer-only localStorage can't gate main-process behaviour (save dialogs,
+  // OS notifications, download folder), so the download manager keeps its own
+  // small JSON store next to the download history. Safe defaults mirror the
+  // previous hard-coded behaviour (system Downloads folder, no dialogs).
+  var _dlSettingsCache = null;
+  function _dlSettingsFile() {
+    try {
+      var dir = path.join(app.getPath('userData'), 'neo-data');
+      try { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); } catch(e) {}
+      return path.join(dir, 'download-settings.json');
+    } catch(e) { return null; }
+  }
+  function _dlReadSettings() {
+    if (_dlSettingsCache) return _dlSettingsCache;
+    var def = { downloadDir: '', askWhereToSave: false, autoOpenPanel: true, notifyOnComplete: true };
+    try {
+      var f = _dlSettingsFile();
+      if (f && fs.existsSync(f)) {
+        var s = JSON.parse(fs.readFileSync(f, 'utf8'));
+        if (s && typeof s === 'object') {
+          def.downloadDir = (typeof s.downloadDir === 'string') ? s.downloadDir : '';
+          def.askWhereToSave = !!s.askWhereToSave;
+          def.autoOpenPanel = (s.autoOpenPanel === undefined) ? true : !!s.autoOpenPanel;
+          def.notifyOnComplete = (s.notifyOnComplete === undefined) ? true : !!s.notifyOnComplete;
+        }
+      }
+    } catch(e) {}
+    _dlSettingsCache = def;
+    return def;
+  }
+  function _dlWriteSettings(s) {
+    try {
+      var f = _dlSettingsFile();
+      if (f) fs.writeFileSync(f, JSON.stringify(s));
+      _dlSettingsCache = s;
+    } catch(e) { _dlSettingsCache = s; }
+  }
+  // Validate a user-picked download folder: must be a string, absolute, and an
+  // existing directory we can write to. Anything else falls back to the OS
+  // Downloads folder — never an arbitrary attacker-supplied path.
+  function _dlValidDir(dir) {
+    try {
+      if (typeof dir !== 'string' || !dir.trim()) return null;
+      var raw = dir.trim();
+      // Reject relative paths outright: path.resolve() would silently anchor
+      // them to the app's CWD (a real bug caught by testing — a "relative/
+      // garbage" setting created folders inside the app directory).
+      if (!path.isAbsolute(raw)) return null;
+      var d = path.resolve(raw);
+      if (!fs.existsSync(d)) { try { fs.mkdirSync(d, { recursive: true }); } catch(e2) { return null; } }
+      var st = fs.statSync(d);
+      if (!st.isDirectory()) return null;
+      fs.accessSync(d, fs.constants.W_OK);
+      return d;
+    } catch(e) { return null; }
+  }
+  // OS toast notifications for download completion/failure (gated by the
+  // notifyOnComplete setting). Main-process Notification needs no page grant.
+  function _dlNotify(title, body) {
+    try {
+      if (!_dlReadSettings().notifyOnComplete) return;
+      if (!Notification.isSupported()) return;
+      var n = new Notification({ title: String(title).slice(0, 80), body: String(body).slice(0, 200), silent: false });
+      n.show();
+    } catch(e) {}
+  }
+  // Only the main browser window's UI webContents may call privileged
+  // download-settings / retry IPC. Site pages (webview/WCV) never get a
+  // contextBridge handle to these channels in the first place; this is the
+  // second, main-side gate.
+  function _dlIsTrustedUI(event) {
+    try {
+      var mw = _mainBrowserWin();
+      return !!(mw && event && event.sender && !event.sender.isDestroyed() && event.sender === mw.webContents);
+    } catch(e) { return false; }
   }
   function _registerDownloadSession(sess) {
     if (!sess || sess._neoDownloadHooked) return;
@@ -4149,8 +4226,23 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
       const ext = (path.extname(filename) || '').toLowerCase();
       const isDangerous = DANGEROUS_EXTS.indexOf(ext) !== -1;
       // Unique final + temp paths (temp stays in .partial until fully done).
-      var finalPath = _dlUniqueIn(DOWNLOADS_DIR, filename);
-      var tempPath = _dlUniqueIn(_dlTemp(), path.basename(finalPath) + '.part');
+      // "Ask where to save" (setting): native save dialog, defaulting into the
+      // configured download folder. Cancelling aborts the download cleanly.
+      var finalPath = null;
+      var dlsSettings = _dlReadSettings();
+      if (dlsSettings.askWhereToSave) {
+        try {
+          var dlgRes = dialog.showSaveDialogSync(senderWin, {
+            title: 'Save download',
+            defaultPath: path.join(DOWNLOADS_DIR, filename),
+            buttonLabel: 'Save'
+          });
+          if (!dlgRes) { try { event.preventDefault(); } catch(e) {} return; }
+          finalPath = dlgRes;
+        } catch(e) { finalPath = null; }
+      }
+      if (!finalPath) finalPath = _dlUniqueIn(DOWNLOADS_DIR, filename);
+      var tempPath = _dlUniqueIn(path.dirname(finalPath), path.basename(finalPath) + '.part');
       var rec = _pendingDownloads[id] = {
         item: item, finalPath: finalPath, tempPath: tempPath,
         filename: path.basename(finalPath), ext: ext,
@@ -4161,6 +4253,12 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
       };
       try { rec.sourceUrl = item.getURL() || ''; } catch(e) {}
       if (isDangerous) {
+        // Show the entry in the panel right away (with a "confirm" pause) so
+        // the user always sees why the download is waiting — and so a deny is
+        // reported as a real Cancelled entry instead of vanishing silently.
+        rec.emittedStart = true;
+        rec.startSent = true;
+        senderWin.webContents.send('download-start', { id, filename: rec.filename, totalBytes: rec.totalBytes, ext: rec.ext, url: rec.sourceUrl || '' });
         senderWin.webContents.send('download-warning', { id, filename: rec.filename, ext, totalBytes });
         return; // waits for download-response before starting
       }
@@ -4179,7 +4277,7 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
       try { if (senderWin && senderWin.webContents && !senderWin.webContents.isDestroyed()) senderWin.webContents.send(ch, payload); } catch(e) { try { _navLog('[DL] send ' + ch + ' failed: ' + (e && e.message)); } catch(e2) {} }
     }
     rec.emittedStart = true;
-    _send('download-start', { id, filename: rec.filename, totalBytes: rec.totalBytes, ext: rec.ext });
+    if (!rec.startSent) { rec.startSent = true; _send('download-start', { id, filename: rec.filename, totalBytes: rec.totalBytes, ext: rec.ext, url: rec.sourceUrl || '' }); }
     try { _navLog('[DL] saving to ' + rec.tempPath + ' -> ' + rec.finalPath); } catch(e) {}
     item.on('updated', (event, st) => {
       try {
@@ -4197,14 +4295,18 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
         else if (total > 0) rec.remainingMs = -1;
         var st2 = _dlState(item);
         rec.state = st2;
+        var canResume = false;
+        try { canResume = item.canResume(); } catch(e2) {}
         _send('download-progress', {
           id, received: recv, total, speed: rec.speed, remainingMs: rec.remainingMs,
-          state: st2, filename: rec.filename, ext: rec.ext
+          state: st2, filename: rec.filename, ext: rec.ext, canResume: canResume,
+          url: rec.sourceUrl || ''
         });
       } catch(e) { try { _navLog('[DL] updated error: ' + (e && e.message)); } catch(e2) {} }
     });
     item.on('done', (event, st) => {
       try {
+        try { _navLog('[DL] done event id=' + id + ' state=' + st); } catch(e0) {}
         if (st === 'completed') {
           // Only finalize after real success: move temp file to final name.
           var ok = false;
@@ -4214,16 +4316,27 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
             else { ok = false; }
           } catch(e) { ok = false; }
           if (ok) {
-            _send('download-done', { id, filename: rec.filename, state: 'completed', path: rec.finalPath, ext: rec.ext });
-            _dlRecordHistory(rec);
+            _send('download-done', { id, filename: rec.filename, state: 'completed', path: rec.finalPath, ext: rec.ext, url: rec.sourceUrl || '' });
+            _dlRecordHistory(rec, 'completed');
+            _dlNotify('Download complete', rec.filename);
           } else {
             try { if (fs.existsSync(rec.tempPath)) fs.unlinkSync(rec.tempPath); } catch(e2) {}
-            _send('download-done', { id, filename: rec.filename, state: 'interrupted', path: '', ext: rec.ext });
+            _send('download-done', { id, filename: rec.filename, state: 'interrupted', path: '', ext: rec.ext, url: rec.sourceUrl || '' });
+            _dlRecordHistory(rec, 'failed', 'Could not finalize file on disk');
+            _dlNotify('Download failed', rec.filename);
           }
         } else {
           // interrupted / cancelled: never keep a partial file.
           try { if (fs.existsSync(rec.tempPath)) fs.unlinkSync(rec.tempPath); } catch(e) {}
-          _send('download-done', { id, filename: rec.filename, state: st, ext: rec.ext });
+          _send('download-done', { id, filename: rec.filename, state: st, ext: rec.ext, url: rec.sourceUrl || '' });
+          if (st === 'cancelled') {
+            _dlRecordHistory(rec, 'cancelled');
+          } else {
+            var errMsg = 'Download interrupted';
+            try { var ierr = item.getLastError(); if (ierr) errMsg = 'Download interrupted (' + ierr + ')'; } catch(e2) {}
+            _dlRecordHistory(rec, 'failed', errMsg);
+            _dlNotify('Download failed', rec.filename);
+          }
         }
         delete _pendingDownloads[id];
       } catch(e) { try { _navLog('[DL] done error: ' + (e && e.message)); } catch(e2) {} }
@@ -4241,7 +4354,13 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
     const rec = _pendingDownloads[id];
     if (!rec) return;
     if (!allow) {
+      try { _navLog('[DL] warning denied by user id=' + id + ' file=' + rec.filename); } catch(e) {}
       try { rec.item.cancel(); } catch(e) {}
+      // Report it properly: the entry was already shown in the panel, so it
+      // must end as Cancelled (not hang forever as a live 0% download), and
+      // history should remember the user's choice.
+      try { _dlUiSend(_mainBrowserWin(), 'download-done', { id, filename: rec.filename, state: 'cancelled', path: '', ext: rec.ext, url: rec.sourceUrl || '' }); } catch(e) {}
+      try { _dlRecordHistory(rec, 'cancelled'); } catch(e2) {}
       delete _pendingDownloads[id];
       return;
     }
@@ -4252,7 +4371,9 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
   ipcMain.on('download-pause', (event, id) => {
     var rec = _pendingDownloads[id];
     if (!rec || !rec.item) return;
-    try { if (!rec.item.isDone() && !rec.item.isPaused()) rec.item.pause(); } catch(e) {}
+    // Electron 42 has no DownloadItem.isDone() — guard on getState() instead
+    // (calling pause on a finished item would otherwise throw and be swallowed).
+    try { if (rec.item.getState() === 'progressing' && !rec.item.isPaused()) rec.item.pause(); } catch(e) {}
   });
   ipcMain.on('download-resume', (event, id) => {
     var rec = _pendingDownloads[id];
@@ -4261,8 +4382,18 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
   });
   ipcMain.on('download-cancel', (event, id) => {
     var rec = _pendingDownloads[id];
+    try { _navLog('[DL] CANCEL ipc id=' + id + ' rec=' + (rec ? 'yes' : 'NO')); } catch(e) {}
+    // Synthetic ids belong to an in-flight PDF save (no DownloadItem behind
+    // it) — flag it so the save aborts and the entry really becomes Cancelled.
+    if (!rec && typeof id === 'number' && id >= 900000) { _dlSynthAbort[id] = true; return; }
     if (!rec || !rec.item) return;
-    try { if (!rec.item.isDone()) rec.item.cancel(); } catch(e) {}
+    try {
+      var _cst = rec.item.getState();
+      if (_cst === 'progressing' || _cst === 'paused') {
+        rec.item.cancel();
+        try { _navLog('[DL] CANCEL called on item id=' + id + ' (state was ' + _cst + ')'); } catch(e2) {}
+      }
+    } catch(e) { try { _navLog('[DL] CANCEL error: ' + (e && e.message)); } catch(e2) {} }
   });
 
   // Open / reveal a completed download in the system.
@@ -4270,8 +4401,21 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
     var rec = id != null && _pendingDownloads[id] ? _pendingDownloads[id] : null;
     var fp = rec && fs.existsSync(rec.finalPath) ? rec.finalPath : '';
     if (!fp && typeof id === 'string') {
-      var p = path.join(DOWNLOADS_DIR, path.basename(id));
-      if (fs.existsSync(p)) fp = p;
+      // History keeps the absolute path the file was actually saved to — use
+      // it first, so Open works even when the file lives in a custom folder
+      // or was renamed with a _1 suffix since. Only then fall back to the
+      // current downloads folder + name.
+      try {
+        var want = path.basename(id);
+        var hl = _dlReadHistory();
+        for (var hi = 0; hi < hl.length; hi++) {
+          if (hl[hi] && hl[hi].name === want && hl[hi].path && fs.existsSync(hl[hi].path)) { fp = hl[hi].path; break; }
+        }
+      } catch(e) {}
+      if (!fp) {
+        var p = path.join(DOWNLOADS_DIR, path.basename(id));
+        if (fs.existsSync(p)) fp = p;
+      }
     }
     if (!fp) return false;
     // Executables run code on open. The renderer-side warning can be bypassed
@@ -4291,22 +4435,628 @@ var fmt = _YT_FORMATS[quality] || _YT_FORMATS[720];
       });
       if (ans !== 0) return false;
     }
-    try { await shell.openPath(fp); return true; } catch(e) { return false; }
+    // PERF/ROBUSTNESS: shell.openPath launches the OS handler (e.g. Edge for a
+    // PDF) and can block for a long time when the system is loaded or the
+    // viewer is wedged — which used to hang this IPC (and anything awaiting it)
+    // indefinitely. Race it against a short timeout so a slow external open can
+    // never stall the app; if we time out, report success optimistically (the
+    // OS did accept the open request) rather than blocking the caller.
+    try {
+      var openP = shell.openPath(fp);
+      var timedOut = false;
+      var guard = new Promise(function(res) { setTimeout(function() { timedOut = true; res('timeout'); }, 5000); });
+      var result = await Promise.race([openP, guard]);
+      if (timedOut) { try { openP.catch(function(){}); } catch(e) {} return true; }
+      return result === '';
+    } catch(e) { return false; }
   });
   ipcMain.handle('show-download-in-folder', async (event, id) => {
     var rec = id != null && _pendingDownloads[id] ? _pendingDownloads[id] : null;
     var fp = rec && fs.existsSync(rec.finalPath) ? rec.finalPath : '';
     if (!fp && typeof id === 'string') {
-      var p2 = path.join(DOWNLOADS_DIR, path.basename(id));
-      if (fs.existsSync(p2)) fp = p2;
+      try {
+        var want2 = path.basename(id);
+        var hl2 = _dlReadHistory();
+        for (var hj = 0; hj < hl2.length; hj++) {
+          if (hl2[hj] && hl2[hj].name === want2 && hl2[hj].path && fs.existsSync(hl2[hj].path)) { fp = hl2[hj].path; break; }
+        }
+      } catch(e) {}
+      if (!fp) {
+        var p2 = path.join(DOWNLOADS_DIR, path.basename(id));
+        if (fs.existsSync(p2)) fp = p2;
+      }
     }
     if (!fp) return false;
     try { shell.showItemInFolder(fp); return true; } catch(e) { return false; }
   });
   // Hook the sessions webviews and the main window actually download through.
   // Registered once (guarded), so N webviews never add N duplicate listeners.
+  // persist:webview_wcv is hooked too: any future/auxiliary view on that
+  // partition must never bypass the download manager.
   _registerDownloadSession(session.defaultSession);
   try { _registerDownloadSession(session.fromPartition('persist:webview')); } catch(e) {}
+  try { _registerDownloadSession(session.fromPartition('persist:webview_wcv')); } catch(e) {}
+
+  // ===== DOWNLOAD SETTINGS IPC =====
+  ipcMain.handle('get-download-settings', (event) => {
+    try { if (!_dlIsTrustedUI(event)) return null; } catch(e) { return null; }
+    return _dlReadSettings();
+  });
+  ipcMain.handle('set-download-settings', (event, patch) => {
+    try { if (!_dlIsTrustedUI(event)) return null; } catch(e) { return null; }
+    if (!patch || typeof patch !== 'object') return null;
+    var s = _dlReadSettings();
+    if ('downloadDir' in patch) {
+      var raw = (typeof patch.downloadDir === 'string') ? patch.downloadDir.trim() : '';
+      if (!raw) s.downloadDir = '';
+      else {
+        var v = _dlValidDir(raw);
+        if (!v) return { settings: s, error: 'Invalid folder path' };
+        s.downloadDir = v;
+      }
+      // The active target folder tracks the setting for all new downloads
+      // and for the files panel listing.
+      try {
+        var eff = _dlValidDir(s.downloadDir) || app.getPath('downloads');
+        DOWNLOADS_DIR = eff;
+      } catch(e2) {}
+    }
+    if ('askWhereToSave' in patch) s.askWhereToSave = !!patch.askWhereToSave;
+    if ('autoOpenPanel' in patch) s.autoOpenPanel = !!patch.autoOpenPanel;
+    if ('notifyOnComplete' in patch) s.notifyOnComplete = !!patch.notifyOnComplete;
+    _dlWriteSettings(s);
+    return { settings: s };
+  });
+  ipcMain.handle('pick-download-folder', (event) => {
+    try { if (!_dlIsTrustedUI(event)) return null; } catch(e) { return null; }
+    try {
+      var win = _mainBrowserWin();
+      var res = dialog.showOpenDialogSync(win || undefined, {
+        title: 'Choose download folder',
+        properties: ['openDirectory', 'createDirectory']
+      });
+      if (res && res[0]) return _dlValidDir(res[0]) || res[0];
+    } catch(e) {}
+    return null;
+  });
+  // Re-download a URL through the browser's own session (cookies + auth
+  // intact). Only http(s) URLs; nothing else can be fetched from here.
+  ipcMain.handle('retry-download', (event, url) => {
+    try { if (!_dlIsTrustedUI(event)) return false; } catch(e) { return false; }
+    try {
+      if (typeof url !== 'string' || !/^https?:\/\//i.test(url.trim())) return false;
+      siteView.webContents.downloadURL(url.trim());
+      return true;
+    } catch(e) { return false; }
+  });
+  // Resolve the webContents of a site <webview> from the id the renderer
+  // passes. The visible page currently lives in the in-DOM <webview> (the
+  // WCV engine is disabled — _wcvEnabled() is false), so PDF/file actions
+  // must target that guest; the privileged UI webContents can never match
+  // (getType() check), so this cannot be turned against the browser chrome.
+  function _dlSiteWc(wcId) {
+    try {
+      if (typeof wcId !== 'number' || !Number.isInteger(wcId) || wcId <= 0) return null;
+      var wc = webContents.fromId(wcId);
+      if (!wc || wc.isDestroyed() || wc.getType() !== 'webview') return null;
+      return wc;
+    } catch(e) { return null; }
+  }
+  function _dlActiveSiteWc(wcId) {
+    var wc = null;
+    try { wc = _dlSiteWc(wcId); } catch(e) {}
+    try {
+      var dbg = '[DL] resolve wcId=' + wcId;
+      var raw = (typeof wcId === 'number' && wcId > 0) ? webContents.fromId(wcId) : null;
+      dbg += ' exists=' + !!raw;
+      if (raw) { try { dbg += ' type=' + raw.getType() + ' dead=' + raw.isDestroyed() + ' url=' + String(raw.getURL() || '').slice(0, 90); } catch(e2) { dbg += ' metaERR'; } }
+      dbg += ' -> ' + (wc ? 'OK url=' + String(wc.getURL() || '').slice(0, 90) : 'NULL');
+      _navLog(dbg);
+    } catch(e3) {}
+    if (!wc) {
+      // The renderer's id can be missing or stale (the <webview> may not have
+      // emitted dom-ready yet, or may have been re-created on navigation).
+      // Fall back to the webview guest that is actually sitting on a real
+      // page — never the privileged UI webContents, which never reports an
+      // http(s) URL of its own here.
+      try {
+        var all = webContents.getAllWebContents();
+        for (var ai = 0; ai < all.length; ai++) {
+          var cand = all[ai];
+          try {
+            if (!cand || cand.isDestroyed() || cand.getType() !== 'webview') continue;
+            if (!/^https?:\/\//i.test(String(cand.getURL() || ''))) continue;
+            if (!wc) { wc = cand; continue; }
+            // Several guests on http pages: prefer the one holding focus.
+            if (typeof cand.isFocused === 'function' && cand.isFocused()) wc = cand;
+          } catch(e4) {}
+        }
+      } catch(e5) {}
+    }
+    if (!wc) {
+      // Fallback for WCV mode (if it is ever re-enabled): the visible
+      // WebContentsView, but only when it is actually on a real page.
+      try {
+        if (siteView && siteView.webContents && !siteView.webContents.isDestroyed() &&
+            /^https?:\/\//i.test(String(siteView.webContents.getURL() || ''))) wc = siteView.webContents;
+      } catch(e) {}
+    }
+    return wc;
+  }
+  // Pages often commit a beat (or several) after the user clicks — the guest
+  // reports an empty URL until then. Wait briefly for a real http(s) URL and
+  // for the load to settle so the save/download acts on the actual page
+  // instead of failing with "nothing to save". Bounded, and never rejects.
+  async function _dlAwaitHttpUrl(wc, budgetMs) {
+    var t0 = Date.now();
+    var last = '', firstHttpAt = 0;
+    while (Date.now() - t0 < budgetMs) {
+      try {
+        if (!wc || wc.isDestroyed()) break;
+        var u = String(wc.getURL() || '');
+        if (u) last = u;
+        if (/^https?:\/\//i.test(u)) {
+          if (!firstHttpAt) firstHttpAt = Date.now();
+          var loading = false;
+          try { loading = !!wc.isLoading(); } catch(e) { loading = false; }
+          // Settled — or the page has been "loading" for a while (busy sites
+          // never go idle): don't hold the save hostage to a spinner.
+          if (!loading || (Date.now() - firstHttpAt) > 8000) return u;
+        }
+      } catch(e) { break; }
+      await new Promise(function(r) { setTimeout(r, 300); });
+    }
+    var fin = '';
+    try { if (wc && !wc.isDestroyed()) fin = String(wc.getURL() || ''); } catch(e) {}
+    if (/^https?:\/\//i.test(fin)) return fin;
+    return (/^https?:\/\//i.test(last)) ? last : '';
+  }
+  // Save the page currently displayed in the site view as a PDF, into the
+  // configured download folder. This renders what is on screen (same idea as
+  // the print dialog's "Save as PDF"), which is the only legitimate way to
+  // keep documents from protected viewers — it never extracts the original
+  // file. The save is announced to the Downloads panel with synthetic
+  // start/progress/done events so it animates exactly like a real download.
+  var _dlSynthSeq = 0;
+  var _dlSynthAbort = {};
+  function _dlUiSend(win, ch, payload) {
+    try { if (win && win.webContents && !win.webContents.isDestroyed()) win.webContents.send(ch, payload); } catch(e) {}
+  }
+  // Race a save step against a user Cancel (and a hard deadline) so the
+  // Cancel button on a PDF entry actually stops the save instead of being
+  // ignored while the entry keeps animating.
+  function _dlSynthRace(id, promise, ms) {
+    return Promise.race([
+      promise.then(function(v) { return { done: true, v: v }; }, function(e) { return { done: true, err: e }; }),
+      new Promise(function(res) {
+        var t0 = Date.now();
+        (function poll() {
+          if (_dlSynthAbort[id]) return res({ done: false, aborted: true });
+          if (Date.now() - t0 > ms) return res({ done: false, timeout: true });
+          setTimeout(poll, 250);
+        })();
+      })
+    ]);
+  }
+  // Scroll the page top->bottom in viewport steps so lazy-loaded document
+  // viewers (Scribd-style canvas pages) actually render into the DOM before
+  // printing, then return to the top. Bounded by step count and wall time so
+  // a hostile page can never hang the save.
+  function _dlWarmPageScript() {
+    return '(' + function() {
+      return new Promise(function(resolve) {
+        try {
+          // Scrollers to drive: the window itself, plus the biggest inner
+          // scroll container (doc viewers often scroll an inner div, not the
+          // window — scrolling only the window would load nothing).
+          var scrollers = [];
+          var se = document.scrollingElement || document.documentElement;
+          if (se && se.scrollHeight > se.clientHeight + 80) scrollers.push(se);
+          var cand = document.querySelectorAll('div,section,main,article');
+          var best = null, bestAmt = 0;
+          for (var i = 0; i < cand.length; i++) {
+            var el = cand[i];
+            if (el.scrollHeight > el.clientHeight + 200 && el.clientHeight > 250) {
+              var amt = el.scrollHeight - el.clientHeight;
+              if (amt > bestAmt) { bestAmt = amt; best = el; }
+            }
+          }
+          if (best && scrollers.indexOf(best) === -1) scrollers.push(best);
+          var vh = window.innerHeight || 800;
+          var maxes = scrollers.map(function(s) { return s.scrollHeight - s.clientHeight; });
+          var globalMax = Math.max.apply(null, maxes.concat([0]));
+          // Short page: nothing to warm up.
+          if (globalMax < vh * 0.6) { resolve(true); return; }
+          var frac = 0, steps = 0;
+          var t0 = Date.now();
+          function tick() {
+            try {
+              if (frac >= 1 || steps >= 700 || Date.now() - t0 > 40000) {
+                scrollers.forEach(function(s) { try { s.scrollTop = 0; } catch(e) {} });
+                try { window.scrollTo(0, 0); } catch(e) {}
+                setTimeout(function() { resolve(true); }, 700);
+                return;
+              }
+              frac = Math.min(1, frac + 0.18);
+              scrollers.forEach(function(s, si) { try { s.scrollTop = Math.round(maxes[si] * frac); } catch(e) {} });
+              try { window.scrollTo(0, Math.round((document.scrollingElement ? document.scrollingElement.scrollHeight - vh : 0) * frac)); } catch(e) {}
+              steps++;
+              setTimeout(tick, 160);
+            } catch (e) { resolve(false); }
+          }
+          tick();
+        } catch (e) { resolve(false); }
+      });
+    }.toString() + ')()';
+  }
+
+  // ===== SAVE AS WORD (.docx) =============================================
+  // Reads the visible page's own content (headings, paragraphs, lists, tables,
+  // quotes, code) and writes a real Office Open XML document. Everything is
+  // built in-process — no extra packages, so it works offline and inside the
+  // packaged app.
+  function _dlExtractPageScript() {
+    var SEL = 'h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,tr,figcaption,dt,dd';
+    function clean(s) {
+      return String(s == null ? '' : s).replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    function visible(el) {
+      try { return el.getClientRects().length > 0; } catch (e) { return true; }
+    }
+    function skipped(el) {
+      try {
+        if (el.closest('script,style,noscript,svg,template,nav,footer,[role="navigation"],[role="contentinfo"],[aria-hidden="true"]')) return true;
+      } catch (e) {}
+      return false;
+    }
+    // Text this element owns itself (children matching SEL are dropped so
+    // nested lists / cells are not repeated inside their parent).
+    function ownText(el) {
+      var c = el.cloneNode(true);
+      var kids = c.querySelectorAll(SEL);
+      for (var i = 0; i < kids.length; i++) { if (kids[i].parentNode) kids[i].parentNode.removeChild(kids[i]); }
+      return clean(c.textContent);
+    }
+    var blocks = [];
+    function add(t, s) {
+      s = clean(s);
+      if (!s) return;
+      var last = blocks.length ? blocks[blocks.length - 1].s : '';
+      if (s === last) return;
+      blocks.push({ t: t, s: s.slice(0, 8000) });
+    }
+    var docTitle = clean(document.title);
+    add('h1', docTitle);
+    var nodes = document.body ? document.body.querySelectorAll(SEL) : [];
+    for (var i = 0; i < nodes.length && blocks.length < 4000; i++) {
+      var el = nodes[i];
+      if (!visible(el) || skipped(el)) continue;
+      var tag = el.tagName;
+      var nested = el.querySelector(SEL);
+      var text = nested ? ownText(el) : clean(el.textContent);
+      if (!text) continue;
+      if (/^H[1-6]$/.test(tag)) {
+        if (text === docTitle) continue;
+        add('h' + tag[1], text);
+        continue;
+      }
+      if (tag === 'LI') {
+        var n = 1, sib = el;
+        while ((sib = sib.previousElementSibling)) { if (sib.tagName === 'LI') n++; }
+        var ordered = !!(el.parentElement && el.parentElement.tagName === 'OL');
+        add(ordered ? 'oli' : 'li', (ordered ? n + '. ' : '\u2022 ') + text);
+        continue;
+      }
+      if (tag === 'TR') {
+        var cells = el.querySelectorAll('td,th'), parts = [];
+        for (var c = 0; c < cells.length; c++) { var ct = clean(cells[c].textContent); if (ct) parts.push(ct); }
+        add('p', parts.join(' | '));
+        continue;
+      }
+      if (tag === 'BLOCKQUOTE') { add('quote', text); continue; }
+      if (tag === 'PRE') { add('code', text); continue; }
+      add('p', text);
+    }
+    return JSON.stringify({ title: docTitle, blocks: blocks });
+  }
+
+  function _dlXmlEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function _dlDocxPara(b) {
+    var style = 'Normal';
+    if (b.t === 'h1') style = 'Heading1';
+    else if (b.t === 'h2') style = 'Heading2';
+    else if (b.t === 'h3') style = 'Heading3';
+    else if (b.t === 'h4' || b.t === 'h5' || b.t === 'h6') style = 'Heading4';
+    else if (b.t === 'quote') style = 'Quote';
+    else if (b.t === 'code') style = 'Code';
+    else if (b.t === 'li' || b.t === 'oli') style = 'List';
+    var ind = (b.t === 'li' || b.t === 'oli') ? '<w:ind w:left="360"/>' : '';
+    var lines = String(b.s).split('\n'), runs = '';
+    for (var i = 0; i < lines.length; i++) {
+      if (i) runs += '<w:br/>';
+      runs += '<w:r><w:t xml:space="preserve">' + _dlXmlEsc(lines[i]) + '</w:t></w:r>';
+    }
+    return '<w:p><w:pPr><w:pStyle w:val="' + style + '"/>' + ind + '</w:pPr>' + runs + '</w:p>';
+  }
+
+  function _dlDocxBuild(blocks, srcUrl) {
+    var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    var body = '';
+    for (var i = 0; i < blocks.length; i++) body += _dlDocxPara(blocks[i]);
+    if (srcUrl) body += _dlDocxPara({ t: 'p', s: 'Source: ' + srcUrl });
+    var documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="' + W + '"><w:body>' + body +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>' +
+      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>' +
+      '</w:sectPr></w:body></w:document>';
+    var st = function (id, name, sz, extra) {
+      return '<w:style w:type="paragraph" w:styleId="' + id + '"><w:name w:val="' + name + '"/>' +
+        '<w:basedOn w:val="Normal"/><w:qFormat/>' + (extra || '') +
+        '<w:rPr><w:b/><w:sz w:val="' + sz + '"/></w:rPr></w:style>';
+    };
+    var stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:styles xmlns:w="' + W + '">' +
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>' +
+      '<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault>' +
+      '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>' +
+      st('Title', 'Title', 40, '<w:pPr><w:spacing w:before="0" w:after="240"/></w:pPr>') +
+      st('Heading1', 'heading 1', 36, '<w:pPr><w:keepNext/><w:spacing w:before="280" w:after="100"/></w:pPr>') +
+      st('Heading2', 'heading 2', 30, '<w:pPr><w:keepNext/><w:spacing w:before="240" w:after="80"/></w:pPr>') +
+      st('Heading3', 'heading 3', 26, '<w:pPr><w:keepNext/><w:spacing w:before="200" w:after="80"/></w:pPr>') +
+      st('Heading4', 'heading 4', 24, '<w:pPr><w:keepNext/><w:spacing w:before="180" w:after="60"/></w:pPr>') +
+      '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:qFormat/>' +
+      '<w:pPr><w:ind w:left="720"/><w:spacing w:before="120" w:after="160"/></w:pPr><w:rPr><w:i/><w:color w:val="555555"/></w:rPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Code"><w:name w:val="Code"/><w:basedOn w:val="Normal"/><w:qFormat/>' +
+      '<w:pPr><w:spacing w:before="80" w:after="160"/></w:pPr>' +
+      '<w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="19"/></w:rPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="List"><w:name w:val="List"/><w:basedOn w:val="Normal"/><w:qFormat/>' +
+      '<w:pPr><w:spacing w:after="60"/></w:pPr></w:style>' +
+      '</w:styles>';
+    var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+      '</Types>';
+    var rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>';
+    var docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>';
+    return _dlZipStored([
+      { name: '[Content_Types].xml', data: Buffer.from(contentTypes, 'utf8') },
+      { name: '_rels/.rels', data: Buffer.from(rels, 'utf8') },
+      { name: 'word/document.xml', data: Buffer.from(documentXml, 'utf8') },
+      { name: 'word/styles.xml', data: Buffer.from(stylesXml, 'utf8') },
+      { name: 'word/_rels/document.xml.rels', data: Buffer.from(docRels, 'utf8') }
+    ]);
+  }
+
+  // Minimal ZIP writer (stored, no compression) — enough for OOXML packages.
+  var _dlZipTbl = null;
+  function _dlZipCrc32(buf) {
+    if (!_dlZipTbl) {
+      _dlZipTbl = [];
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        _dlZipTbl[n] = c >>> 0;
+      }
+    }
+    var crc = 0xFFFFFFFF;
+    for (var i = 0; i < buf.length; i++) crc = _dlZipTbl[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+  function _dlZipStored(files) {
+    var parts = [], central = [], offset = 0;
+    for (var i = 0; i < files.length; i++) {
+      var name = Buffer.from(files[i].name, 'utf8');
+      var data = files[i].data;
+      var crc = _dlZipCrc32(data);
+      var lh = Buffer.alloc(30);
+      lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4);
+      lh.writeUInt16LE(0, 6); lh.writeUInt16LE(0, 8); lh.writeUInt16LE(0, 10); lh.writeUInt16LE(0, 12);
+      lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22);
+      lh.writeUInt16LE(name.length, 26); lh.writeUInt16LE(0, 28);
+      parts.push(lh, name, data);
+      var ch = Buffer.alloc(46);
+      ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6);
+      ch.writeUInt16LE(0, 8); ch.writeUInt16LE(0, 10); ch.writeUInt16LE(0, 12); ch.writeUInt16LE(0, 14);
+      ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24);
+      ch.writeUInt16LE(name.length, 28); ch.writeUInt16LE(0, 30); ch.writeUInt16LE(0, 32);
+      ch.writeUInt16LE(0, 34); ch.writeUInt16LE(0, 36); ch.writeUInt32LE(0, 38);
+      ch.writeUInt32LE(offset, 42);
+      central.push(ch, name);
+      offset += 30 + name.length + data.length;
+    }
+    var cdSize = 0;
+    for (var j = 0; j < central.length; j++) cdSize += central[j].length;
+    var eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(0, 4); eocd.writeUInt16LE(0, 6);
+    eocd.writeUInt16LE(files.length, 8); eocd.writeUInt16LE(files.length, 10);
+    eocd.writeUInt32LE(cdSize, 12); eocd.writeUInt32LE(offset, 16); eocd.writeUInt16LE(0, 20);
+    return Buffer.concat(parts.concat(central).concat([eocd]));
+  }
+
+  // Read the page's content, then hand back a finished .docx buffer.
+  async function _dlWordFromPage(view, url) {
+    var raw = null;
+    try { raw = await view.executeJavaScript('(' + _dlExtractPageScript + ')()', true); }
+    catch (e) { throw new Error('Could not read this page\u2019s content'); }
+    var data = null;
+    try { data = JSON.parse(raw); } catch (e) {}
+    var blocks = (data && Array.isArray(data.blocks)) ? data.blocks : [];
+    if (!blocks.length) throw new Error('There is nothing on this page to save');
+    return _dlDocxBuild(blocks, String(url || ''));
+  }
+
+  // Shared "save the visible page as a file" flow behind Save-as-PDF and
+  // Save-as-Word: same live download animation, history entry, Cancel button
+  // and page-change protection for both formats.
+  async function _dlSynthSave(event, wcId, kind) {
+    try { if (!_dlIsTrustedUI(event)) return { ok: false, error: 'Not allowed' }; } catch(e) { return { ok: false, error: 'Not allowed' }; }
+    var isWord = (kind === 'word');
+    var EXT = isWord ? '.docx' : '.pdf';
+    var win = null; try { win = _mainBrowserWin(); } catch(e) {}
+    var synthId = 900000 + (++_dlSynthSeq);
+    var url = '', title = '', ticker = null, started = false;
+    var detachNav = null, navGone = false;
+    function evSend(ch, payload) { _dlUiSend(win, ch, payload); }
+    function outName() {
+      var t = title || 'page';
+      if (!(new RegExp(EXT.replace('.', '\\.') + '$', 'i')).test(t)) t += EXT;
+      return t;
+    }
+    function stopTicker() { try { if (ticker) { clearInterval(ticker); ticker = null; } } catch(e) {} }
+    function detachNavWatch() { try { if (detachNav) detachNav(); } catch(e) {} }
+    function failOut(msg) {
+      stopTicker();
+      detachNavWatch();
+      delete _dlSynthAbort[synthId];
+      if (started) evSend('download-done', { id: synthId, filename: outName(), state: 'interrupted', path: '', ext: EXT, url: url });
+      try { _dlRecordHistory({ filename: outName(), finalPath: '', sourceUrl: url, totalBytes: 0, ext: EXT }, 'failed', msg); } catch(e) {}
+      return { ok: false, error: msg };
+    }
+    function cancelOut() {
+      stopTicker();
+      detachNavWatch();
+      delete _dlSynthAbort[synthId];
+      try { _navLog('[DL] PDF save cancelled by user id=' + synthId); } catch(e) {}
+      if (started) {
+        evSend('download-done', { id: synthId, filename: outName(), state: 'cancelled', path: '', ext: EXT, url: url });
+        try { _dlRecordHistory({ filename: outName(), finalPath: '', sourceUrl: url, totalBytes: 0, ext: EXT }, 'cancelled'); } catch(e) {}
+      }
+      return { ok: false, error: 'Cancelled' };
+    }
+    try {
+      // The guest may still be spinning up when the user clicks — retry for a
+      // beat instead of failing instantly with "No page is open".
+      var view = null;
+      for (var vi = 0; vi < 25 && !view; vi++) {
+        if (_dlSynthAbort[synthId]) return cancelOut();
+        view = _dlActiveSiteWc(wcId);
+        if (!view) await new Promise(function(r) { setTimeout(r, 300); });
+      }
+      if (!view) return { ok: false, error: 'No page is open' };
+      evSend('download-start', { id: synthId, filename: 'Saving page...', totalBytes: 100, ext: EXT, url: '' });
+      started = true;
+      var tickN = 5;
+      ticker = setInterval(function() {
+        tickN = Math.min(70, tickN + 4);
+        evSend('download-progress', { id: synthId, received: tickN, total: 100, speed: 0, remainingMs: -1, state: 'progressing', filename: outName(), ext: EXT, url: url });
+      }, 700);
+      // The guest often has no committed URL yet right after clicking — wait
+      // for the real page instead of failing with "nothing to save".
+      var wantUrl = '';
+      try { wantUrl = String(view.getURL() || ''); } catch(e) {}
+      if (!/^https?:\/\//i.test(wantUrl)) wantUrl = '';
+      var step = await _dlSynthRace(synthId, _dlAwaitHttpUrl(view, 25000), 30000);
+      if (_dlSynthAbort[synthId]) return cancelOut();
+      if (step.done) url = step.v || '';
+      else { try { url = String(view.getURL() || ''); } catch(e) { url = ''; } }
+      if (!url) return failOut('Nothing to save on this page yet');
+      if (wantUrl && String(url).split('#')[0] !== wantUrl.split('#')[0]) {
+        return failOut('The page changed while saving — try again');
+      }
+      // Watch the tab: if it navigates somewhere else while we capture, the
+      // save would either hang forever or write the wrong page — fail loudly
+      // instead (the user can just press save again).
+      var capUrl = String(url).split('#')[0];
+      var _onNavGone = function() { navGone = true; };
+      detachNav = function() { try { view.removeListener('did-navigate', _onNavGone); } catch(e) {} };
+      try { view.on('did-navigate', _onNavGone); } catch(e) {}
+      var pageChanged = function() {
+        if (navGone) return true;
+        try { return String(view.getURL() || '').split('#')[0] !== capUrl; } catch(e) { return false; }
+      };
+      try { title = String(view.getTitle() || '').trim(); } catch(e2) {}
+      if (!title) { try { title = path.basename(new URL(url).pathname); } catch(e2) { title = ''; } }
+      title = String(title).replace(/[\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'page';
+      if (!(new RegExp(EXT.replace('.', '\\.') + '$', 'i')).test(title)) title += EXT;
+      var s = _dlReadSettings();
+      var dir = _dlValidDir(s.downloadDir) || DOWNLOADS_DIR || app.getPath('downloads');
+      evSend('download-progress', { id: synthId, received: 20, total: 100, speed: 0, remainingMs: -1, state: 'progressing', filename: title, ext: EXT, url: url });
+      // Load every lazy page first — otherwise only the visible pages end up
+      // in the PDF (the "blank/missing content" bug).
+      var warm = await _dlSynthRace(synthId, Promise.resolve().then(function() { return view.executeJavaScript(_dlWarmPageScript(), true); }), 60000);
+      if (_dlSynthAbort[synthId]) return cancelOut();
+      if (pageChanged()) return failOut('The page changed while saving — try again');
+      // The title can lag the URL commit (right after a load/reset Chromium
+      // still reports its host:port fallback). The page has fully settled by
+      // now — re-read so the file gets the REAL title, not the fallback.
+      try {
+        var extRe2 = new RegExp(EXT.replace('.', '\\.') + '$', 'i');
+        var bareT = String(title).replace(extRe2, '');
+        var lateT = String(view.getTitle() || '').trim().replace(/[\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (lateT && lateT !== bareT) { title = lateT; if (!extRe2.test(title)) title += EXT; }
+      } catch(e2) {}
+      evSend('download-progress', { id: synthId, received: 78, total: 100, speed: 0, remainingMs: -1, state: 'progressing', filename: title, ext: EXT, url: url });
+      // Build the actual file: a real PDF of the rendered pages, or a real
+      // Office Open XML (.docx) document written from the page's own content.
+      var pr = await _dlSynthRace(synthId, Promise.resolve().then(function() {
+        if (isWord) return _dlWordFromPage(view, url);
+        return view.printToPDF({ printBackground: true, pageSize: 'A4', scale: 1, displayHeaderFooter: false });
+      }), 60000);
+      if (_dlSynthAbort[synthId]) return cancelOut();
+      if (pageChanged()) return failOut('The page changed while saving — try again');
+      if (!pr.done) return failOut(isWord ? 'Word file took too long to build' : 'PDF took too long to build');
+      if (pr.err) return failOut((pr.err && pr.err.message) || ('Could not create the ' + (isWord ? 'Word file' : 'PDF')));
+      var outBuf = pr.v;
+      stopTicker();
+      detachNavWatch();
+      delete _dlSynthAbort[synthId];
+      if (!outBuf || !outBuf.length) return failOut('Could not create the ' + (isWord ? 'Word file' : 'PDF'));
+      var finalPath = _dlUniqueIn(dir, title);
+      fs.writeFileSync(finalPath, outBuf);
+      var rec = { filename: path.basename(finalPath), finalPath: finalPath, sourceUrl: url, totalBytes: outBuf.length, ext: EXT };
+      _dlRecordHistory(rec, 'completed', '');
+      _dlNotify(isWord ? 'Word file saved' : 'PDF saved', rec.filename);
+      evSend('download-done', { id: synthId, filename: rec.filename, state: 'completed', path: finalPath, ext: EXT, url: url });
+      return { ok: true, path: finalPath, name: rec.filename, size: outBuf.length };
+    } catch(e) {
+      return failOut((e && e.message) || ('Could not create the ' + (isWord ? 'Word file' : 'PDF')));
+    }
+  }
+  ipcMain.handle('save-page-as-pdf', (event, wcId) => _dlSynthSave(event, wcId, 'pdf'));
+  ipcMain.handle('save-page-as-word', (event, wcId) => _dlSynthSave(event, wcId, 'word'));
+  // Download the file the site view is currently sitting on, through the
+  // browser session (cookies + auth) so the download manager's normal flow
+  // (naming, dedupe, warnings, history) applies. Only direct file links —
+  // anything else tells the renderer to suggest Save-as-PDF instead.
+  ipcMain.handle('download-current-file', async (event, wcId) => {
+    try { if (!_dlIsTrustedUI(event)) return { ok: false, error: 'Not allowed' }; } catch(e) { return { ok: false, error: 'Not allowed' }; }
+    try {
+      var view = null;
+      for (var vj = 0; vj < 20 && !view; vj++) {
+        view = _dlActiveSiteWc(wcId);
+        if (!view) await new Promise(function(r) { setTimeout(r, 300); });
+      }
+      if (!view) return { ok: false, error: 'No page is open' };
+      // Wait for the guest to commit the real page URL before judging it.
+      var url = await _dlAwaitHttpUrl(view, 15000);
+      if (!/^https?:\/\//i.test(url)) return { ok: false, error: 'No page is open' };
+      // Strip query/hash, then look for a known file extension at the end.
+      var clean = url.split(/[?#]/)[0];
+      if (!/\.(pdf|zip|rar|7z|tar|gz|docx?|xlsx?|pptx?|csv|txt|epub|mp3|mp4|m4a|wav|jpe?g|png|gif|webp|apk|iso|exe|msi)$/i.test(clean)) {
+        return { ok: false, error: 'notfile' };
+      }
+      view.downloadURL(url);
+      return { ok: true };
+    } catch(e) { return { ok: false, error: (e && e.message) || 'Could not start download' }; }
+  });
 
   app.on('web-contents-created', (event, contents) => {
     const type = contents.getType();
@@ -4347,11 +5097,13 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
     // keeps decoding while the user is on another tab. Re-applied on navigation
     // so a tab that moves between a normal page and a media site stays correct.
     function applyThrottle() {
-      // Uniform fast treatment: keep background throttling DISABLED for every
-      // webContents (host window and all site webviews), exactly like YouTube
-      // (a streaming site) gets. This makes every site's timers/rendering run at
-      // full speed so any site opens and responds as fast as YouTube does.
-      // Tradeoff (accepted per user request): more CPU/GPU usage across tabs.
+      // Background throttling stays DISABLED for every webContents, exactly as
+      // before (this was a deliberate choice: it keeps every site's timers and
+      // rendering at full speed). It must stay disabled on the HOST window too —
+      // throttling the host stalls Runtime.evaluate (CDP) and printToPDF, which
+      // reproduced as a Save-as-PDF hang. The real background-CPU wins come from
+      // elsewhere (nav-trace removal, injection dedupe, snapshot gating, pool
+      // cap), not from throttling the UI thread.
       try { contents.setBackgroundThrottling(false); } catch (e) {}
     }
     applyThrottle();
@@ -4390,10 +5142,13 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
 
     contents.on('render-process-gone', (e, details) => {
       if (type === 'webview' && details && details.reason && details.reason !== 'clean-exit') {
-        // Tell the renderer to recreate the webview so the user never stares at a dead page.
+        // Tell the renderer to recreate the webview so the user never stares at a
+        // dead page. Pass the DEAD webContents id so the renderer only recovers
+        // the visible tab — a pooled background guest crashing must never reload
+        // the healthy page the user is looking at.
         try {
           const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
-          if (win) win.webContents.send('webview-recover');
+          if (win) win.webContents.send('webview-recover', contents.id);
         } catch (err) {}
       }
     });
@@ -4401,32 +5156,40 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
       if (type === 'webview') {
         try {
           const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
-          if (win) win.webContents.send('webview-recover');
+          if (win) win.webContents.send('webview-recover', contents.id);
         } catch (err) {}
       }
     });
 
-    // Inject Leet Assistant into all web contents (webview, window, etc.)
-    // Use did-navigate AND did-finish-load for maximum timing coverage
+    // Inject Leet Assistant + Shields DOM ad-cleaner into web contents.
+    // PERF: the ad-cleaner used to be executeJavaScript'd on 3 events per
+    // navigation (did-navigate, did-finish-load, did-navigate-in-page). Each call
+    // is an IPC + a 7KB script parse on the main thread. The payload self-guards,
+    // so re-injection is a no-op in the page — but we still paid the IPC. Now we
+    // track a per-document generation (bumped on every did-navigate, which fires
+    // for each new document INCLUDING same-URL reloads) and inject the cleaner at
+    // most once per document. SPA (did-navigate-in-page) route changes keep the
+    // already-live MutationObserver, so they no longer re-inject at all.
     contents.on('did-navigate', (e, url) => {
-      console.log('[AUTH] did-navigate:', (url||'').split('?')[0]);
+      contents._neoDocGen = (contents._neoDocGen || 0) + 1;   // new document
       if (process.env.NEO_NO_INJECTIONS !== '1') {
         injectLeetAssistant(contents);
       }
-      injectShieldsDomCleaner(contents);
+      injectShieldsDomCleaner(contents, contents._neoDocGen);
     });
     contents.on('did-finish-load', () => {
-      // Re-inject on finish-load to catch any timing gaps
+      // Only inject if did-navigate somehow didn't already cover this document.
       if (process.env.NEO_NO_INJECTIONS !== '1') {
         injectLeetAssistant(contents);
       }
-      injectShieldsDomCleaner(contents);
+      injectShieldsDomCleaner(contents, contents._neoDocGen);
     });
     contents.on('did-navigate-in-page', (e, url, isMainFrame) => {
+      // SPA route change: same document, so the live ad-cleaner observer stays.
+      // Only Leet needs a re-check (it is URL-keyed and cheap on non-LeetCode).
       if (isMainFrame && process.env.NEO_NO_INJECTIONS !== '1') {
         injectLeetAssistant(contents);
       }
-      if (isMainFrame) injectShieldsDomCleaner(contents);
     });
 
     // DOM-level ad blocking is handled by renderer-side injection (ai-browser.html)
@@ -6261,30 +7024,36 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
     }
   });
 
+  var _leetScriptCache = null;   // read once, reused (was readFileSync per nav)
   function injectLeetAssistant(contents) {
     try {
       var url = contents.getURL();
       if (!url || !url.includes('leetcode.com/problems/')) return;
       if (url === _leetLastInjectUrl) return;
       _leetLastInjectUrl = url;
-      var leetCodeScript = fs.readFileSync(path.join(__dirname, 'leet-content.js'), 'utf-8');
-      contents.executeJavaScript(leetCodeScript).catch(function(){});
+      if (_leetScriptCache === null) {
+        try { _leetScriptCache = fs.readFileSync(path.join(__dirname, 'leet-content.js'), 'utf-8'); } catch(e) { _leetScriptCache = ''; }
+      }
+      if (!_leetScriptCache) return;
+      contents.executeJavaScript(_leetScriptCache).catch(function(){});
       setTimeout(function() {
-        try { contents.executeJavaScript(leetCodeScript).catch(function(){}); } catch(e) {}
+        try { contents.executeJavaScript(_leetScriptCache).catch(function(){}); } catch(e) {}
       }, 3000);
     } catch(e) {}
   }
 
   // Shields DOM ad-sniper: a lightweight MutationObserver injected into every
   // page that yanks dynamically-inserted ad elements the filter lists miss.
-  // Only runs while shields are enabled. Both payloads below self-guard
-  // (window.__neoAdCleaner / window.__nxYtAdSkip), so re-injection on every
-  // navigation event is a harmless no-op after the first — and a URL-keyed
-  // dedup would WRONGLY skip document reloads of the same URL, leaving ads
-  // unskipped. Never dedup by URL here.
+  // Only runs while shields are enabled. The payload self-guards
+  // (window.__neoAdCleaner), so re-injection is a harmless no-op after the first.
+  // docGen (optional) de-duplicates per DOCUMENT: the caller passes a counter
+  // bumped on every did-navigate, so a same-URL reload still re-injects (new
+  // document) while the redundant did-finish-load for the same document is
+  // skipped. Without docGen (older callers) it always injects as before.
   var _adCleanerSrc = null;
-  function injectShieldsDomCleaner(contents) {
+  function injectShieldsDomCleaner(contents, docGen) {
     try {
+      if (docGen != null && contents._adCleanGen === docGen) return;   // already injected this doc
       if (!_shields || !_shields.settings || _shields.settings.enabled !== true) return;
       var url = (contents.getURL && contents.getURL()) || contents._neoLastUrl || '';
       if (!/^https?:/i.test(url)) return;
@@ -6295,6 +7064,7 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
         try { _adCleanerSrc = fs.readFileSync(path.join(__dirname, 'ad-cleaner.js'), 'utf-8'); } catch (e) { _adCleanerSrc = ''; }
       }
       if (!_adCleanerSrc) return;
+      if (docGen != null) contents._adCleanGen = docGen;   // mark injected before the async exec
       contents.executeJavaScript(_adCleanerSrc).catch(function(){});
       // YouTube in-player ad skipper (same code the cosmetic pipeline
       // injects into the site view). This runs in EVERY guest — tab
@@ -6331,10 +7101,11 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
   });
 
   // ===== DOWNLOAD MANAGER =====
-  // Save all user downloads to the REAL OS-level Downloads folder (visible in
-  // Windows File Explorer). app.getPath('downloads') resolves to the actual
-  // system Downloads directory, e.g. C:\Users\<user>\Downloads on Windows.
-  const DOWNLOADS_DIR = app.getPath('downloads');
+  // Default save location = the REAL OS Downloads folder (visible in Windows
+  // File Explorer). The user may override it in Settings → Downloads; the
+  // effective folder is re-validated on every settings change and falls back
+  // to the OS folder if the custom path disappears or isn't writable.
+  let DOWNLOADS_DIR = _dlValidDir(_dlReadSettings().downloadDir) || app.getPath('downloads');
   try { if (!fs.existsSync(DOWNLOADS_DIR)) fs.mkdirSync(DOWNLOADS_DIR, { recursive: true }); } catch(e) {}
   // App-internal sidecar data (thumbnails, metadata, playlists, temp partial
   // files) lives in a private app-data folder so it never clutters the real
@@ -6390,7 +7161,11 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
       return _dlReadHistory().map(function(h) {
         var exists = false;
         try { exists = !!(h.path && fs.existsSync(h.path)); } catch(e) {}
-        return { name: h.name, size: h.size || 0, ext: h.ext || '', url: h.url || '', time: h.time || 0, exists: exists };
+        return {
+          name: h.name, size: h.size || 0, ext: h.ext || '', url: h.url || '',
+          time: h.time || 0, exists: exists,
+          status: h.status || 'completed', error: h.error || ''
+        };
       });
     } catch(e) { return []; }
   });
@@ -6415,20 +7190,51 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
       return path.join(dir, 'browser-history.json');
     } catch(e) { return null; }
   }
+  // PERF: the visit log is held IN MEMORY and flushed to disk asynchronously
+  // (debounced). It used to do a synchronous read+parse+stringify+write of up to
+  // 10,000 entries on EVERY did-navigate / title change. That ran on the main
+  // process thread — the same thread that services the webRequest callbacks used
+  // by shields ad-blocking — so every page load paid a tens-to-hundreds of ms
+  // main-thread stall right while the network was busiest. Now navigation just
+  // mutates a cached array and returns; a single async write lands shortly after.
+  var _webHistMem = null;       // cached visit list (newest first)
+  var _webHistFlushT = null;    // pending debounced flush timer
+  var _webHistDirMade = false;
+  function _webHistEnsureDir() {
+    if (_webHistDirMade) return;
+    try {
+      var dir = path.join(app.getPath('userData'), 'neo-data');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      _webHistDirMade = true;
+    } catch(e) {}
+  }
   function _webHistRead() {
+    if (_webHistMem) return _webHistMem;          // already loaded: no disk hit
     try {
       var f = _webHistFile();
-      if (!f || !fs.existsSync(f)) return [];
-      var list = JSON.parse(fs.readFileSync(f, 'utf8'));
-      return Array.isArray(list) ? list : [];
-    } catch(e) { return []; }
+      if (!f || !fs.existsSync(f)) { _webHistMem = []; return _webHistMem; }
+      var list = JSON.parse(fs.readFileSync(f, 'utf8'));   // one-time load only
+      _webHistMem = Array.isArray(list) ? list : [];
+    } catch(e) { _webHistMem = []; }
+    return _webHistMem;
+  }
+  function _webHistPersistNow() {
+    try {
+      var f = _webHistFile();
+      if (!f || !_webHistMem) return;
+      _webHistEnsureDir();
+      var payload = JSON.stringify(_webHistMem.slice(0, 10000));
+      // Async write off the main thread's hot path; .catch swallows disk errors
+      // so a full/read-only disk can never reject an IPC handler.
+      var p = fs.promises.writeFile(f, payload);
+      if (p && p.catch) p.catch(function(){});
+    } catch(e) {}
   }
   function _webHistWrite(list) {
-    try {
-      var f = _webHistFile();
-      if (!f) return;
-      fs.writeFileSync(f, JSON.stringify(list.slice(0, 10000)));
-    } catch(e) {}
+    _webHistMem = list;
+    if (_webHistFlushT) clearTimeout(_webHistFlushT);
+    // Debounce: rapid navigations / title updates coalesce into ONE disk write.
+    _webHistFlushT = setTimeout(function() { _webHistFlushT = null; _webHistPersistNow(); }, 400);
   }
   function _webHistValidUrl(u) {
     try {
@@ -6446,6 +7252,7 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
       // Skip reload/duplicate spam: same URL within 10 seconds.
       if (last && last.url === url && (now - Number(last.ts || 0)) < 10000) return true;
       list.unshift({ id: now + '_' + Math.floor(Math.random() * 1e6), url: url, title: String((payload && payload.title) || ''), ts: now });
+      if (list.length > 10000) list.length = 10000;
       _webHistWrite(list);
       return true;
     } catch(e) { return false; }
@@ -6479,6 +7286,116 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
   });
   ipcMain.handle('webhist-clear', async () => {
     try { _webHistWrite([]); return true; } catch(e) { return false; }
+  });
+  // Flush any pending visit-log write on quit so nothing is lost.
+  app.on('before-quit', function() {
+    try { if (_webHistFlushT) { clearTimeout(_webHistFlushT); _webHistFlushT = null; } } catch(e) {}
+    _webHistPersistNow();
+  });
+
+  // ===== SEARCH HISTORY (search QUERIES only) =====
+  // Visited URLs never come through here — they stay in the browsing history
+  // (webhist-*) above, so queries and URLs remain cleanly separated. The
+  // "enabled" flag is enforced in the MAIN process, so turning recording off
+  // means nothing is ever written to disk, even if the renderer misbehaves.
+  function _searchHistFile() {
+    try {
+      var dir = path.join(app.getPath('userData'), 'neo-data');
+      try { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); } catch(e) {}
+      return path.join(dir, 'search-history.json');
+    } catch(e) { return null; }
+  }
+  function _searchHistRead() {
+    try {
+      var f = _searchHistFile();
+      if (!f || !fs.existsSync(f)) return { enabled: true, items: [] };
+      var data = JSON.parse(fs.readFileSync(f, 'utf8'));
+      // Tolerate a bare array from any older/other writer.
+      if (Array.isArray(data)) return { enabled: true, items: data };
+      return { enabled: data && data.enabled !== false, items: Array.isArray(data && data.items) ? data.items : [] };
+    } catch(e) { return { enabled: true, items: [] }; }
+  }
+  function _searchHistWrite(data) {
+    try {
+      var f = _searchHistFile();
+      if (!f) return;
+      var items = (data && Array.isArray(data.items)) ? data.items.slice(0, 500) : [];
+      fs.writeFileSync(f, JSON.stringify({ enabled: !(data && data.enabled === false), items: items }));
+    } catch(e) {}
+  }
+  // Text typed into the browser's own search bar only — never page content,
+  // form fields, passwords or tokens. Length-capped and control-char stripped.
+  function _searchHistCleanQ(q) {
+    var s = String(q == null ? '' : q).replace(/[\u0000-\u001F\u007F]/g, ' ').trim().replace(/\s+/g, ' ');
+    if (!s || s.length > 300) return '';
+    return s;
+  }
+  ipcMain.handle('searchhist-log', async (event, q) => {
+    try {
+      var text = _searchHistCleanQ(q);
+      if (!text) return { ok: false };
+      var data = _searchHistRead();
+      if (data.enabled === false) return { ok: false, disabled: true };
+      var now = Date.now();
+      var items = data.items;
+      var key = text.toLowerCase();
+      var hit = -1;
+      for (var i = 0; i < items.length; i++) {
+        if (String(items[i].q || '').toLowerCase() === key) { hit = i; break; }
+      }
+      var entry;
+      if (hit >= 0) {
+        entry = items.splice(hit, 1)[0];
+        entry.ts = now;
+        entry.count = (Number(entry.count) || 1) + 1;
+      } else {
+        entry = { id: now + '_' + Math.floor(Math.random() * 1e6), q: text, ts: now, count: 1 };
+      }
+      items.unshift(entry);
+      data.items = items;
+      _searchHistWrite(data);
+      return { ok: true, item: { id: String(entry.id), q: String(entry.q), ts: Number(entry.ts) || now, count: Number(entry.count) || 1 } };
+    } catch(e) { return { ok: false }; }
+  });
+  ipcMain.handle('searchhist-get', async () => {
+    try {
+      var data = _searchHistRead();
+      return {
+        enabled: data.enabled !== false,
+        items: data.items.slice(0, 200).map(function(it) {
+          return { id: String(it.id || ''), q: String(it.q || ''), ts: Number(it.ts || 0), count: Number(it.count || 1) };
+        })
+      };
+    } catch(e) { return { enabled: true, items: [] }; }
+  });
+  ipcMain.handle('searchhist-del', async (event, ids) => {
+    try {
+      var set = {};
+      (Array.isArray(ids) ? ids : [ids]).forEach(function(x) { set[String(x)] = true; });
+      var data = _searchHistRead();
+      data.items = data.items.filter(function(it) { return !set[String(it.id || '')]; });
+      _searchHistWrite(data);
+      return true;
+    } catch(e) { return false; }
+  });
+  ipcMain.handle('searchhist-clear', async () => {
+    try {
+      var data = _searchHistRead();
+      data.items = [];
+      _searchHistWrite(data);
+      return true;
+    } catch(e) { return false; }
+  });
+  ipcMain.handle('searchhist-set-enabled', async (event, on) => {
+    try {
+      var data = _searchHistRead();
+      data.enabled = on !== false;
+      // Turning recording off also drops what was already recorded — the user
+      // asked not to keep a search log, so don't keep the old one either.
+      if (data.enabled === false) data.items = [];
+      _searchHistWrite(data);
+      return { enabled: data.enabled };
+    } catch(e) { return { enabled: true }; }
   });
 
   // List files saved by the NEXORA YouTube Downloader ONLY. These live in the
