@@ -338,15 +338,19 @@ function startBackend() {
     startOllama();
     // Find Python in the venv
     const pyPaths = [
+      path.join(BACKEND_DIR, 'venv', 'Scripts', 'pythonw.exe'),
       path.join(BACKEND_DIR, 'venv', 'Scripts', 'python.exe'),
+      path.join(BACKEND_DIR, '..', '.venv', 'Scripts', 'pythonw.exe'),
       path.join(BACKEND_DIR, '..', '.venv', 'Scripts', 'python.exe'),
+      path.join(BACKEND_DIR, '.venv', 'Scripts', 'pythonw.exe'),
       path.join(BACKEND_DIR, '.venv', 'Scripts', 'python.exe'),
+      'pythonw',
       'python',
       'python3',
     ];
     let pythonExe = null;
     for (const p of pyPaths) {
-      if (p === 'python' || p === 'python3') { pythonExe = p; break; }
+      if (p === 'python' || p === 'python3' || p === 'pythonw') { pythonExe = p; break; }
       if (fs.existsSync(p)) { pythonExe = p; break; }
     }
     if (!pythonExe) { pythonExe = 'python'; }
