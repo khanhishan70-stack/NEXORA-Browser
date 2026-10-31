@@ -27,6 +27,7 @@
 const { app, ipcMain, session } = require('electron');
 const { FiltersEngine, Request, fromElectronDetails } = require('@cliqz/adblocker-electron');
 const { parse: parseDomain } = require('tldts');
+const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -242,7 +243,7 @@ function isYouTubeAdRequest(url) {
 // intervals. Used by getCosmetic() AND by main.js for every guest webview.
 const YT_SKIPPER_JS =
   '\n;(function(){if(window.__nxYtAdSkip)return;window.__nxYtAdSkip=true;window.__nxYtAdMuted=false;window.__nxYtRate=1;' +
-  'var H=[".ytp-ad-overlay-container",".ytp-ad-text-overlay",".ytp-ad-image-overlay",".ytp-ad-module","#player-ads",".ytd-action-companion-ad-renderer","ytd-display-ad-renderer","ytd-ad-slot-renderer","ytd-promoted-video-renderer","ytd-compact-promoted-video-renderer","ytd-statement-banner-renderer","#masthead-ad",".ytp-ad-message-container"];' +
+  'var H=[".ytp-ad-overlay-container",".ytp-ad-text-overlay",".ytp-ad-image-overlay",".ytp-ad-module",".ytd-action-companion-ad-renderer","ytd-display-ad-renderer","ytd-ad-slot-renderer","ytd-promoted-video-renderer","ytd-compact-promoted-video-renderer","ytd-statement-banner-renderer","#masthead-ad",".ytp-ad-message-container"];' +
   'function sweep(){try{var p=document.querySelector("#movie_player")||document.querySelector(".html5-video-player");' +
   'var v=document.querySelector("video");var ad=!!(p&&p.classList&&p.classList.contains("ad-showing"));' +
   'if(ad&&!window.__nxYtWasAd&&v){window.__nxYtRate=v.playbackRate||1;}' +
@@ -253,6 +254,60 @@ const YT_SKIPPER_JS =
   'else if(v&&window.__nxYtAdMuted){try{v.muted=false;v.playbackRate=window.__nxYtRate||1;}catch(e){}window.__nxYtAdMuted=false;}' +
   'for(var i=0;i<H.length;i++){var els=document.querySelectorAll(H[i]);for(var j=0;j<els.length;j++){try{els[j].style.setProperty("display","none","important");}catch(e){}}}}catch(e){}}' +
   'setInterval(sweep,500);sweep();})();';
+
+// ---------------------------------------------------------------------------
+// YouTube anti-enforcement defuser (network level, main process)
+// ---------------------------------------------------------------------------
+// Blocking ads only at the network layer is DETECTABLE. YouTube asks its own
+// player API what ads it should serve; we drop those requests; YouTube notices
+// the drop and replaces the player with the "Ad blockers violate YouTube's
+// Terms of Service" screen and refuses playback.
+//
+// Brave / uBlock Origin do not fight this by allowing the ad requests - they
+// strip the ad metadata out of the player JSON so the player never learns an
+// ad ever existed (uBO: json-prune, plus replace=/"adPlacements"/"no_ads"/).
+// This is that technique done in the main process with
+// webRequest.filterResponseData, so it runs BEFORE the page sees one byte and
+// needs no in-page script - which matters here, because the guest webview must
+// never get a preload (known black-screen trigger on this machine; see the
+// get-beat-preload handler in main.js).
+const YT_AD_JSON_KEYS = ['adPlacements', 'adSlots', 'playerAds'];
+function isYouTubeHostName(h) {
+  h = String(h || '').toLowerCase();
+  return h === 'youtube.com' || h.endsWith('.youtube.com') ||
+         h === 'youtube-nocookie.com' || h.endsWith('.youtube-nocookie.com') ||
+         h === 'youtu.be' || h.endsWith('.youtu.be');
+}
+function ytHostOf(url) {
+  try { return (new URL(url).hostname || '').toLowerCase(); } catch (e) { return ''; }
+}
+// Which responses carry ad metadata we must neutralise.
+function ytRewriteKind(url, resourceType) {
+  if (!isYouTubeHostName(ytHostOf(url))) return null;
+  const u = String(url || '').toLowerCase();
+  // The watch page's inline ytInitialPlayerResponse carries the same ad
+  // payload, and the player reads it before the first API call.
+  if (resourceType === 'mainFrame') return 'body';
+  if (resourceType === 'xhr' || resourceType === 'fetch' || resourceType === 'other') {
+    if (/\/youtubei\/v1\/(player|playlist|get_watch)(\?|$)/.test(u)) return 'body';
+    if (/\/watch\?/.test(u)) return 'body';
+  }
+  return null;
+}
+// Rename ad keys to a harmless no_ads key instead of deleting them - uBlock's
+// approach, which keeps the JSON shape valid for everything that reads it.
+function patchYouTubePayload(text) {
+  if (typeof text !== 'string' || !text) return null;
+  let hit = false;
+  let out = text;
+  for (let i = 0; i < YT_AD_JSON_KEYS.length; i++) {
+    const key = '"' + YT_AD_JSON_KEYS[i] + '"';
+    if (out.indexOf(key) === -1) continue;
+    hit = true;
+    out = out.split(key).join('"no_ads"');
+  }
+  return hit ? out : null;
+}
 
 // and the audio CDN). EasyList contains rules targeting these that break
 // ad-supported (Free) playback — the ads and the music stream from the same
@@ -312,6 +367,8 @@ class NeoShields {
     this._pubRate = 500;
     this._sessions = [];
     this._registered = false;
+    // requestId -> content-encoding of YouTube responses we are rewriting.
+    this._ytEnc = {};
     this._lastMainFrameSite = null;
     this._logger = opts.logger || (() => {});
     this._mainWin = opts.getMainWindow || null;
@@ -416,7 +473,7 @@ class NeoShields {
   // Handles: favicon suppression, main-frame stats reset, per-site off,
   // category engines, stats + publish. MUST be the only onBeforeRequest on the
   // session.
-  makeHandler() {
+  makeHandler(ses) {
     return (details, callback) => {
       try {
         const url = details.url || '';
@@ -429,6 +486,14 @@ class NeoShields {
         }
         if (!/^https?:\/\//i.test(url)) { callback({}); return; }
         if (this.settings.enabled !== true) { callback({}); return; }
+
+        // YouTube anti-detection: strip ad metadata out of the player JSON and
+        // the watch-page HTML before the page ever sees it. Blocking on its own
+        // is visible to YouTube, which then takes over the player with the
+        // "Ad blockers violate YouTube's Terms of Service" screen.
+        if (this.settings.categories && this.settings.categories.ads !== false) {
+          this._ytRewrite(ses, details);
+        }
 
         // Main frame = navigation. Reset the per-site counter when the site
         // key changes (fresh page-load stats like Brave). Only the MALICIOUS
@@ -530,6 +595,56 @@ class NeoShields {
         callback({});
       }
     };
+  }
+
+  // ---- YouTube response rewriting ------------------------------------------
+  // Strips ad metadata out of YouTube's own player JSON / watch HTML so the
+  // page never learns an ad existed (see patchYouTubePayload). Rewriting makes
+  // Content-Length stale, so registrations() also drops that header for the
+  // responses we touch, and remembers each response's content-encoding here so
+  // the body goes back out compressed exactly as it arrived.
+  _ytRewrite(ses, details) {
+    const self = this;
+    try {
+      if (!ses || typeof ses.webRequest.filterResponseData !== 'function') return;
+      if (!ytRewriteKind(details.url, details.resourceType)) return;
+      const rid = details.requestId;
+      const enc = this._ytEnc[rid] || '';
+      let filter = null;
+      try { filter = ses.webRequest.filterResponseData(rid); } catch (e) { filter = null; }
+      if (!filter) return;
+      const chunks = [];
+      filter.ondata = (ev) => { chunks.push(Buffer.from(ev.data)); };
+      filter.onend = () => {
+        let raw = null;
+        let out = null;
+        try {
+          raw = Buffer.concat(chunks);
+          if (raw && raw.length) {
+            let text;
+            if (enc === 'gzip' || enc === 'x-gzip') text = zlib.gunzipSync(raw).toString('utf8');
+            else if (enc === 'deflate') {
+              try { text = zlib.inflateSync(raw).toString('utf8'); }
+              catch (e) { text = zlib.inflateRawSync(raw).toString('utf8'); }
+            } else if (enc === 'br') text = zlib.brotliDecompressSync(raw).toString('utf8');
+            else text = raw.toString('utf8');
+
+            const patched = patchYouTubePayload(text);
+            if (patched !== null) {
+              const buf = Buffer.from(patched, 'utf8');
+              if (enc === 'gzip' || enc === 'x-gzip') out = zlib.gzipSync(buf, { level: 4 });
+              else if (enc === 'deflate') out = zlib.deflateSync(buf, { level: 4 });
+              else if (enc === 'br') out = zlib.brotliCompressSync(buf);
+              else out = buf;
+            }
+          }
+        } catch (e) { out = null; }
+        // A decode failure must never break the page: ship the original bytes.
+        try { filter.write(out && out.length ? out : raw); } catch (e) {}
+        try { filter.close(); } catch (e) {}
+        try { delete self._ytEnc[rid]; } catch (e) {}
+      };
+    } catch (e) {}
   }
 
   _count(attSite, cat) {
@@ -639,7 +754,8 @@ class NeoShields {
                'ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-ad-slot-renderer,' +
                'ytd-promoted-video-renderer,ytd-compact-promoted-video-renderer,' +
                'ytd-statement-banner-renderer,.ytp-ad-message-container,' +
-               '#player-ads,#masthead-ad,.ytd-banner-promo-renderer{display:none !important;visibility:hidden !important;}';
+               '#masthead-ad,.ytd-banner-promo-renderer{display:none !important;visibility:hidden !important;}' +
+               'ytd-enforcement-message-view-model{display:none !important;visibility:hidden !important;}';
         injections += YT_SKIPPER_JS;
       }
       return { css: css, injections: injections };
@@ -901,7 +1017,33 @@ class NeoShields {
     this._registered = true;
     sessions.forEach((ses) => {
       try {
-        ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, this.makeHandler());
+        ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, this.makeHandler(ses));
+        // Content-Length is stale the moment a YouTube body is rewritten, so
+        // drop it for exactly those responses and remember their
+        // content-encoding for _ytRewrite to restore. Electron allows one
+        // listener per event per session, so this is registered here rather
+        // than in main.js (the only other onHeadersReceived is the
+        // NEO_AUTH_DEBUG cookie diagnostic, which covers Google only).
+        try {
+          const self = this;
+          ses.webRequest.onHeadersReceived({ urls: ['https://*youtube.com/*', 'https://*.youtube.com/*', 'https://*youtube-nocookie.com/*', 'https://*.youtu.be/*'] }, function(details, cb) {
+            try {
+              if (details.requestId && ytRewriteKind(details.url, details.resourceType)) {
+                const headers = details.responseHeaders || {};
+                let enc = '';
+                for (const name in headers) {
+                  const lower = String(name || '').toLowerCase();
+                  if (lower === 'content-encoding') { enc = String((headers[name] || [])[0] || '').toLowerCase(); delete headers[name]; }
+                  if (lower === 'content-length') { delete headers[name]; }
+                }
+                self._ytEnc[details.requestId] = enc;
+                cb({ responseHeaders: headers });
+                return;
+              }
+            } catch (e) {}
+            cb({ responseHeaders: details.responseHeaders });
+          });
+        } catch (e) {}
       } catch (e) {
         this._logger('shields: register session failed: ' + e.message);
       }

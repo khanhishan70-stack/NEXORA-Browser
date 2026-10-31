@@ -530,11 +530,77 @@ function _forceLightGoogleAuth(wc, alwaysLight) {
   } catch(e) {}
 }
 
+// ===== YOUTUBE ANTI-ENFORCEMENT DEFUSER - main-world document_start =====
+// yt-defuse.js strips the ad metadata (adPlacements / adSlots / playerAds) out
+// of the player JSON inside the page, before YouTube's own scripts read it, so
+// no ad is ever scheduled and there is no failed ad request for YouTube to
+// detect (the uBlock Origin / Brave technique; network blocking itself stays
+// in the main process). Delivery is per guest WebContents via the DevTools
+// protocol command Page.addScriptToEvaluateOnNewDocument: the payload then
+// executes in the PAGE'S OWN JS WORLD before any page script of every
+// document - the only delivery that both wins the race against YouTube's
+// inline <script> and bypasses the page's require-trusted-types-for CSP that
+// silently blocks <script>/textContent injection. The payload is host-gated to
+// youtube/youtu.be/youtube-nocookie only. All guest webviews share the
+// persist:webview partition, so this one hook covers the site view, every tab
+// webview and the mirrors. injectShieldsDomCleaner() additionally re-arms it
+// at navigation/load time through the proven executeJavaScript channel.
+var _ytDefuseSrc = '';
+try {
+  _ytDefuseSrc = fs.readFileSync(path.join(__dirname, 'yt-defuse.js'), 'utf8');
+} catch (e) { _ytDefuseSrc = ''; }
+function _registerYtDefuse(wc) {
+  try {
+    if (!_ytDefuseSrc || !wc || !wc.debugger) return;
+    // Deliberately NO session filter: <webview> guests still report the
+    // default session at web-contents-created time (their partition attaches
+    // moments later), so any session check here silently misses the main
+    // browsing surface. yt-defuse.js is host-gated to the youtube/youtu.be/
+    // youtube-nocookie hosts, so registering on every WebContents (app UI,
+    // mirrors, the visible WebContentsView, popups) is inert everywhere else.
+    if (typeof wc.debugger.isAttached === 'function' && wc.debugger.isAttached()) {
+      console.log('[YT-DEFUSE] debugger already held; load-time re-arm will cover');
+      return;
+    }
+    wc.debugger.attach();
+    var _label = (function () { try { return wc.getType() + '#' + wc.id; } catch (eX) { return '?'; } })();
+    var _timed = function (p, ms) {
+      return Promise.race([
+        p,
+        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout ' + ms + 'ms')); }, ms); }),
+      ]);
+    };
+    var _reg = function () {
+      try {
+        _timed(wc.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: _ytDefuseSrc }), 8000)
+          .then(function () { console.log('[YT-DEFUSE] document_start script registered (' + _label + ')'); })
+          .catch(function (e2) { console.log('[YT-DEFUSE] register failed (' + _label + '): ' + (e2 && e2.message)); });
+      } catch (e3) {
+        console.log('[YT-DEFUSE] register threw (' + _label + '): ' + e3.message);
+      }
+    };
+    try {
+      _timed(wc.debugger.sendCommand('Page.enable'), 8000).then(_reg).catch(function (e4) {
+        // Page.enable may hang on contents with no live frame yet; try the
+        // registration anyway, it is what actually matters.
+        console.log('[YT-DEFUSE] Page.enable: ' + (e4 && e4.message) + ' (' + _label + ')');
+        _reg();
+      });
+    } catch (e5) { _reg(); }
+  } catch (e) {
+    // Another debugger (devtools / remote debugging port) may hold this
+    // target - the load-time re-arm in injectShieldsDomCleaner still covers
+    // YouTube on this WebContents.
+    console.log('[YT-DEFUSE] attach skipped: ' + e.message);
+  }
+}
+
 // Apply the white-login fix to EVERY webContents the app creates (login windows,
 // Help/sign-in popups, the site view, webview mirrors). URL-gated to Google auth
 // domains so non-Google pages keep following the OS theme.
 app.on('web-contents-created', function(e, wc) {
   try { _forceLightGoogleAuth(wc, false); } catch(err) {}
+  try { _registerYtDefuse(wc); } catch(err) {}
 });
 
 // Chrome identity for calling sites (Discord/WhatsApp). The DOM webview
@@ -2224,6 +2290,14 @@ app.whenReady().then(async () => {
   const { YT_SKIPPER_JS } = require('./shields');
   const _shields = new NeoShields({ getMainWindow: () => _mainBrowserWin() });
   _shields.registrations();
+
+  // ===== YOUTUBE ANTI-ENFORCEMENT DEFUSER =====
+  // Delivery lives in _registerYtDefuse() (web-contents-created, defined near
+  // the top of this file): the payload is injected into every guest's MAIN
+  // world at document_start through Page.addScriptToEvaluateOnNewDocument,
+  // because session preloads run in the isolated world (patching fetch there
+  // does nothing) and YouTube's Trusted Types CSP blocks DOM <script>
+  // injection. See yt-defuse.js for the payload itself.
 
   // ===== VOLUME BOOST (main-side per-frame delivery) =====
   // The engine (vol-boost.js) amplifies audio by routing <video>/<audio> through
@@ -7073,6 +7147,12 @@ contents.setUserAgent(getUAForURL((contents.getURL && contents.getURL()) || ''))
         var _skipHost = '';
         try { _skipHost = new URL(url).hostname.toLowerCase(); } catch (e) {}
         if (/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(_skipHost)) {
+          // Re-arm the anti-enforcement defuser through this proven
+          // executeJavaScript channel. The payload guards itself with __nxD,
+          // so the document_start registration and this re-arm can never
+          // double-patch; this only matters if the DevTools registration
+          // could not attach (e.g. another debugger holds the target).
+          if (_ytDefuseSrc) contents.executeJavaScript(_ytDefuseSrc).catch(function(){});
           if (_shields.settings.categories && _shields.settings.categories.ads !== false && YT_SKIPPER_JS) {
             contents.executeJavaScript(YT_SKIPPER_JS).catch(function(){});
           }
