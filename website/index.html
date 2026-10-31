@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEXORA Browser — THE WEB, REIMAGINED.</title>
-<meta name="description" content="NEXORA Browser — a modern desktop browsing experience designed for speed, productivity, customization, and AI-powered workflows.">
+<title>NEXORA Browser â€” THE WEB, REIMAGINED.</title>
+<meta name="description" content="NEXORA Browser â€” a modern desktop browsing experience designed for speed, productivity, customization, and AI-powered workflows.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0c10'/%3E%3Cpath d='M18 46V18l28 28V18' stroke='%2300fff9' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,17 +53,17 @@
         <button class="btn btn-primary btn-lg" data-download>Download NEXORA</button>
         <a class="btn btn-outline btn-lg" href="#features">Explore Features</a>
       </div>
-      <p class="hero-note"><button class="linklike" data-github>View on GitHub</button> <span aria-hidden="true">·</span> <span id="heroReleaseNote">Latest: v1.2.1 · 2026-10-30</span></p>
+      <p class="hero-note"><button class="linklike" data-github>View on GitHub</button> <span aria-hidden="true">Â·</span> <span id="heroReleaseNote">Latest: v1.2.2 Â· 2026-10-31</span></p>
     </div>
     <div class="hero-visual" aria-label="Interactive NEXORA monitor demo">
       <div class="monitor-stage">
         <div class="monitor-glow" aria-hidden="true"></div>
         <div class="monitor">
           <div class="monitor-bezel">
-            <div class="shot-bar"><span class="monitor-camera" aria-hidden="true"></span><span class="shot-tag" id="monitorTag">INTERACTIVE DEMO · DISPLAY OFF</span></div>
+            <div class="shot-bar"><span class="monitor-camera" aria-hidden="true"></span><span class="shot-tag" id="monitorTag">INTERACTIVE DEMO Â· DISPLAY OFF</span></div>
             <div class="monitor-screen" id="monitorScreen" data-state="off" aria-describedby="monitorStatus">
-              <div class="monitor-off" id="monitorOff"><span aria-hidden="true">◉</span><strong>DISPLAY OFF</strong><small>Press Power to show the desktop</small></div>
-              <div class="monitor-boot" id="monitorBoot" hidden><svg class="brand-mark boot-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0d1512"/><path d="M18 46V18l28 28V18" stroke="#00fff9" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><strong>NEXORA</strong><span class="boot-spinner" aria-hidden="true"></span><small>Preparing desktop preview…</small></div>
+              <div class="monitor-off" id="monitorOff"><span aria-hidden="true">â—‰</span><strong>DISPLAY OFF</strong><small>Press Power to show the desktop</small></div>
+              <div class="monitor-boot" id="monitorBoot" hidden><svg class="brand-mark boot-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0d1512"/><path d="M18 46V18l28 28V18" stroke="#00fff9" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><strong>NEXORA</strong><span class="boot-spinner" aria-hidden="true"></span><small>Preparing desktop previewâ€¦</small></div>
               <div class="monitor-desktop" id="monitorDesktop" hidden>
                 <div class="desktop-logo" aria-hidden="true">N<span>EXORA</span><small>THE WEB, REIMAGINED.</small></div>
                 <div class="desktop-app">
@@ -73,12 +73,12 @@
                   </button>
                   <p class="desktop-instruction">Select the icon to open the browser preview</p>
                 </div>
-                <div class="desktop-taskbar" aria-hidden="true"><span>▦</span><span>◉</span><span>◌</span><time>10:24</time></div>
+                <div class="desktop-taskbar" aria-hidden="true"><span>â–¦</span><span>â—‰</span><span>â—Œ</span><time>10:24</time></div>
               </div>
               <div class="monitor-browser" id="monitorBrowser" hidden>
                 <div class="browser-chrome"><span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-address">nexora://home</span></div>
                 <img id="monitorShot" src="assets/screenshots/nexora-home.png" alt="NEXORA Browser home screen with clock, search and shortcuts" loading="eager">
-                <div class="monitor-caption" id="monitorCaption">NEXORA home · Clock, search, shortcuts, rails.</div>
+                <div class="monitor-caption" id="monitorCaption">NEXORA home Â· Clock, search, shortcuts, rails.</div>
               </div>
               <span class="screen-reflection" aria-hidden="true"></span>
             </div>
@@ -89,65 +89,65 @@
         </div>
       </div>
       <div class="monitor-controls" aria-label="Monitor controls">
-        <button class="monitor-power" id="monitorPower" type="button" aria-pressed="false" aria-controls="monitorScreen"><span aria-hidden="true">⏻</span><b>Power</b></button>
+        <button class="monitor-power" id="monitorPower" type="button" aria-pressed="false" aria-controls="monitorScreen"><span aria-hidden="true">â»</span><b>Power</b></button>
         <div class="slide-controls" id="slideControls" hidden>
-          <button type="button" id="slidePrev" aria-label="Previous screenshot">‹</button>
+          <button type="button" id="slidePrev" aria-label="Previous screenshot">â€¹</button>
           <span id="slideIndicator" aria-live="off">1 / 6</span>
-          <button type="button" id="slideNext" aria-label="Next screenshot">›</button>
+          <button type="button" id="slideNext" aria-label="Next screenshot">â€º</button>
         </div>
       </div>
-      <p class="monitor-status" id="monitorStatus" role="status" aria-live="polite" aria-atomic="true">Monitor is off · Press Power to show the desktop</p>
-      <div class="hero-badges"><span>v1.2.1</span><span>Windows x64</span><span>Free download</span></div>
+      <p class="monitor-status" id="monitorStatus" role="status" aria-live="polite" aria-atomic="true">Monitor is off Â· Press Power to show the desktop</p>
+      <div class="hero-badges"><span>v1.2.2</span><span>Windows x64</span><span>Free download</span></div>
     </div>
   </div>
   <div class="hero-stats">
     <div><strong>8+</strong><span>built-in productivity tools</span></div>
-    <div><strong>1-click</strong><span>camera · mic · screen access</span></div>
+    <div><strong>1-click</strong><span>camera Â· mic Â· screen access</span></div>
     <div><strong>100%</strong><span>local-first browsing data</span></div>
   </div>
 </section>
 
 <div class="marquee" aria-hidden="true"><div class="marquee-track">
-<span>VERTICAL TABS <b>✦</b></span><span>ESTA AI <b>✦</b></span><span>TAB PREVIEW FAN <b>✦</b></span><span>HISTORY LOCK <b>✦</b></span><span>SHIELDS <b>✦</b></span><span>1-CLICK CALLS <b>✦</b></span><span>VOLUME BOOST <b>✦</b></span><span>VERTICAL TABS <b>✦</b></span><span>ESTA AI <b>✦</b></span><span>TAB PREVIEW FAN <b>✦</b></span><span>HISTORY LOCK <b>✦</b></span><span>SHIELDS <b>✦</b></span><span>1-CLICK CALLS <b>✦</b></span><span>VOLUME BOOST <b>✦</b></span>
+<span>VERTICAL TABS <b>âœ¦</b></span><span>ESTA AI <b>âœ¦</b></span><span>TAB PREVIEW FAN <b>âœ¦</b></span><span>HISTORY LOCK <b>âœ¦</b></span><span>SHIELDS <b>âœ¦</b></span><span>1-CLICK CALLS <b>âœ¦</b></span><span>VOLUME BOOST <b>âœ¦</b></span><span>VERTICAL TABS <b>âœ¦</b></span><span>ESTA AI <b>âœ¦</b></span><span>TAB PREVIEW FAN <b>âœ¦</b></span><span>HISTORY LOCK <b>âœ¦</b></span><span>SHIELDS <b>âœ¦</b></span><span>1-CLICK CALLS <b>âœ¦</b></span><span>VOLUME BOOST <b>âœ¦</b></span>
 </div></div>
 
 <!-- ================= FEATURES ================= -->
 <section class="section" id="features">
   <p class="kicker">Features</p>
   <h2>EVERYTHING YOU NEED.<br>NOTHING IN YOUR WAY.</h2>
-  <p class="sub">Every card below is a real, working part of NEXORA Browser — not a concept.</p>
+  <p class="sub">Every card below is a real, working part of NEXORA Browser â€” not a concept.</p>
   <div class="monitor-wall" id="featureMonitorWall" aria-label="Feature highlights shown on three monitors">
     <article class="showcase-monitor" data-monitor-kind="feature" aria-roledescription="carousel" aria-label="Feature highlights monitor one">
-      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES · 01</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES Â· 01</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
       <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
       <div class="showcase-caption"><strong class="showcase-title"></strong><span class="showcase-summary"></span></div>
-      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">‹</button><span class="showcase-count">01 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">›</button></div>
+      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">â€¹</button><span class="showcase-count">01 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">â€º</button></div>
     </article>
     <article class="showcase-monitor" data-monitor-kind="feature" aria-roledescription="carousel" aria-label="Feature highlights monitor two">
-      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES · 02</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES Â· 02</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
       <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
       <div class="showcase-caption"><strong class="showcase-title"></strong><span class="showcase-summary"></span></div>
-      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">‹</button><span class="showcase-count">02 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">›</button></div>
+      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">â€¹</button><span class="showcase-count">02 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">â€º</button></div>
     </article>
     <article class="showcase-monitor" data-monitor-kind="feature" aria-roledescription="carousel" aria-label="Feature highlights monitor three">
-      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES · 03</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+      <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">FEATURES Â· 03</span></div><div class="showcase-screen"><div class="showcase-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
       <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
       <div class="showcase-caption"><strong class="showcase-title"></strong><span class="showcase-summary"></span></div>
-      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">‹</button><span class="showcase-count">03 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">›</button></div>
+      <div class="showcase-controls"><button type="button" class="showcase-prev" aria-label="Previous feature">â€¹</button><span class="showcase-count">03 / 11</span><button type="button" class="showcase-next" aria-label="Next feature">â€º</button></div>
     </article>
   </div>
   <div class="cards">
-    <article class="card reveal"><div class="card-ico">🗂️</div><h3>Vertical Tabs, Reimagined</h3><p>A slim icon rail keeps every site one click away, with lazy loading so background tabs stay light.</p></article>
-    <article class="card reveal"><div class="card-ico">🪟</div><h3>Stage Manager Tab Previews</h3><p>Hover any tab and a tilted stack of live page previews fans out — recognise any page at a glance, click a card to jump to it.</p></article>
-    <article class="card reveal"><div class="card-ico">✨</div><h3>ESTA AI Assistant</h3><p>ESTA lives in a side panel: chat, page summaries, coding help and offline chat, powered by the local NEXORA backend.</p></article>
-    <article class="card reveal"><div class="card-ico">🕓</div><h3>Chrome-Style History + Lock</h3><p>Full-page history grouped by day with search and one-click reopen — protected by your own history password.</p></article>
-    <article class="card reveal"><div class="card-ico">🎥</div><h3>Calls That Just Work</h3><p>One toolbar button shows camera, microphone and screen-share status. Approvals are automatic, so Meet, Discord and WhatsApp calls connect instantly.</p></article>
-    <article class="card reveal"><div class="card-ico">⬇️</div><h3>Download Manager</h3><p>Built-in download panel with history, plus a YouTube saver and a picture-to-PDF converter in the side rail.</p></article>
-    <article class="card reveal"><div class="card-ico">🛡️</div><h3>Shields &amp; Safety</h3><p>Built-in ad &amp; tracker blocking, AI phishing checks and per-site permission controls with an allow/block popup.</p></article>
-    <article class="card reveal"><div class="card-ico">🧰</div><h3>Toolbox Rail</h3><p>Translator, volume boost to 300%, hands-free voice, Pomodoro timer, LeetCode tutor, video editor and offline AI — docked on the right, each with hover previews.</p></article>
-    <article class="card reveal"><div class="card-ico">🎨</div><h3>Make It Yours</h3><p>Custom wallpapers, themes, layouts and a NEXORA account with encrypted backup sync across your PCs.</p></article>
-    <article class="card reveal"><div class="card-ico">▶️</div><h3>YouTube Saver</h3><p>On any watch page, one button offers 360p, 720p, 1080p, 4K or MP3 audio — saved straight to your PC.</p></article>
-    <article class="card reveal"><div class="card-ico">📴</div><h3>Offline AI Chat</h3><p>A private on-device assistant that keeps chatting with memory and files even with no internet at all.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ—‚ï¸</div><h3>Vertical Tabs, Reimagined</h3><p>A slim icon rail keeps every site one click away, with lazy loading so background tabs stay light.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸªŸ</div><h3>Stage Manager Tab Previews</h3><p>Hover any tab and a tilted stack of live page previews fans out â€” recognise any page at a glance, click a card to jump to it.</p></article>
+    <article class="card reveal"><div class="card-ico">âœ¨</div><h3>ESTA AI Assistant</h3><p>ESTA lives in a side panel: chat, page summaries, coding help and offline chat, powered by the local NEXORA backend.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ•“</div><h3>Chrome-Style History + Lock</h3><p>Full-page history grouped by day with search and one-click reopen â€” protected by your own history password.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸŽ¥</div><h3>Calls That Just Work</h3><p>One toolbar button shows camera, microphone and screen-share status. Approvals are automatic, so Meet, Discord and WhatsApp calls connect instantly.</p></article>
+    <article class="card reveal"><div class="card-ico">â¬‡ï¸</div><h3>Download Manager</h3><p>Built-in download panel with history, plus a YouTube saver and a picture-to-PDF converter in the side rail.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ›¡ï¸</div><h3>Shields &amp; Safety</h3><p>Built-in ad &amp; tracker blocking, AI phishing checks and per-site permission controls with an allow/block popup.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ§°</div><h3>Toolbox Rail</h3><p>Translator, volume boost to 300%, hands-free voice, Pomodoro timer, LeetCode tutor, video editor and offline AI â€” docked on the right, each with hover previews.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸŽ¨</div><h3>Make It Yours</h3><p>Custom wallpapers, themes, layouts and a NEXORA account with encrypted backup sync across your PCs.</p></article>
+    <article class="card reveal"><div class="card-ico">â–¶ï¸</div><h3>YouTube Saver</h3><p>On any watch page, one button offers 360p, 720p, 1080p, 4K or MP3 audio â€” saved straight to your PC.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ“´</div><h3>Offline AI Chat</h3><p>A private on-device assistant that keeps chatting with memory and files even with no internet at all.</p></article>
   </div>
 </section>
 
@@ -158,20 +158,20 @@
     <h2>YOUR BROWSER.<br>WITH INTELLIGENCE BUILT IN.</h2>
     <p class="sub">Meet ESTA, your AI-powered browsing companion.</p>
     <ul class="esta-list">
-      <li><strong>Conversations</strong> — ask anything in the side panel, without leaving your page.</li>
-      <li><strong>Page help</strong> — summaries and explanations of what you're reading.</li>
-      <li><strong>Code &amp; study</strong> — debugging help, LeetCode walkthroughs, learning tutor.</li>
-      <li><strong>Offline mode</strong> — chat with an on-device model when you're offline.*</li>
+      <li><strong>Conversations</strong> â€” ask anything in the side panel, without leaving your page.</li>
+      <li><strong>Page help</strong> â€” summaries and explanations of what you're reading.</li>
+      <li><strong>Code &amp; study</strong> â€” debugging help, LeetCode walkthroughs, learning tutor.</li>
+      <li><strong>Offline mode</strong> â€” chat with an on-device model when you're offline.*</li>
     </ul>
     <p class="fine">* AI features run through the NEXORA backend app on your PC. Sample chat shown is an illustrative demo.</p>
     <div class="cta-row"><a class="btn btn-primary" href="#screens">Discover ESTA</a></div>
   </div>
   <div class="esta-visual" aria-label="ESTA conversation preview (illustrative mockup)">
     <div class="chat-mock">
-      <div class="chat-head"><span class="mock-pulse"></span>ESTA AI <em>· browsing companion</em></div>
+      <div class="chat-head"><span class="mock-pulse"></span>ESTA AI <em>Â· browsing companion</em></div>
       <div class="chat-body">
         <div class="mock-msg me">What is this article about?</div>
-        <div class="mock-msg ai">It's a guide to urban gardening — here are the 3 key takeaways: 1) start with herbs, 2) …</div>
+        <div class="mock-msg ai">It's a guide to urban gardening â€” here are the 3 key takeaways: 1) start with herbs, 2) â€¦</div>
         <div class="mock-msg me">Turn that into a weekend checklist.</div>
         <div class="mock-msg ai typing"><span></span><span></span><span></span></div>
       </div>
@@ -184,7 +184,7 @@
 <section class="section" id="screens">
   <p class="kicker">Showcase</p>
   <h2>SEE NEXORA UP CLOSE.</h2>
-  <p class="sub">Every preview below is a <em>real screenshot</em> of NEXORA Browser — click any to enlarge.</p>
+  <p class="sub">Every preview below is a <em>real screenshot</em> of NEXORA Browser â€” click any to enlarge.</p>
   <div class="shots">
     <figure class="shot reveal" data-shot="home"><div class="shot-mini"><img class="shot-img" src="assets/screenshots/nexora-home.png" alt="Real NEXORA Browser home screen" loading="lazy"></div><figcaption><strong>NEXORA home</strong><span>Clock, search, shortcuts, rails.</span></figcaption></figure>
     <figure class="shot reveal" data-shot="esta"><div class="shot-mini"><img class="shot-img" src="assets/screenshots/nexora-esta.png" alt="Real ESTA AI assistant panel" loading="lazy"></div><figcaption><strong>ESTA assistant</strong><span>Summarise, explain, translate, notes.</span></figcaption></figure>
@@ -202,30 +202,32 @@
 <section class="section" id="whatsnew">
   <p class="kicker">Changelog</p>
   <h2>WHAT'S NEW IN NEXORA.</h2>
-  <p class="sub">Every release, honestly listed — features added, fixed, or removed. Your browser announces these itself with an update popup.</p>
+  <p class="sub">Every release, honestly listed â€” features added, fixed, or removed. Your browser announces these itself with an update popup.</p>
   <div class="changelog">
-    <article class="change reveal"><div class="change-head"><strong>v1.2.1</strong><span>2026-10-30 · current</span></div><ul><li>⚡ Pages open noticeably faster — history logging no longer does heavy disk work while a page is loading</li><li>⚡ Smoother browsing — removed the 1-pixel resize flicker and a leftover debug writer that ran on every navigation</li><li>🔧 Fixed sites that glitched: some links double-loaded or lost form data on submit</li><li>🔧 A crashed background tab no longer reloads the page you are looking at</li><li>🔧 The update popup now compares against the correct version, so it stops nagging after you update</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.2.0</strong><span>2026-10-17</span></div><ul><li>➕ pic2pdf is now a full PDF Workbench: open, merge, split, extract, rotate, delete, reorder and insert blank pages</li><li>➕ Add page numbers, text watermarks and edit PDF metadata (title, author, subject, keywords)</li><li>🔒 Everything runs locally — your PDFs are never uploaded</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.9</strong><span>2026-10-16</span></div><ul><li>🔧 No more double-launch backend wars and flashing consoles — second launch simply stops, healthy backends are adopted not killed</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.8</strong><span>2026-10-15</span></div><ul><li>🔧 Update installer fix for PCs where extraction failed to start (missing assembly load)</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.7</strong><span>2026-10-15</span></div><ul><li>➖ Removed: Docs search mode from the home search bar (Chat + Google only now)</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.6</strong><span>2026-10-15</span></div><ul><li>🔧 Update extractor fixed for long file names — no more red errors during update, install finishes clean</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.5</strong><span>2026-10-15</span></div><ul><li>➖ Removed: Docs search mode from the home search bar (Chat + Google only now)</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.4</strong><span>2026-10-15</span></div><ul><li>🔧 Update download retries past antivirus file holds instead of failing</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.3</strong><span>2026-10-15</span></div><ul><li>🏠 Classic build release: the exact v1.0.6 experience (login system untouched) — only the backend first-run install and the update checker repaired</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.2</strong><span>2026-10-15</span></div><ul><li>🔧 One-click update restart really fixed: the installer could die silently before replacing files — now it logs every step and the browser only restarts once the installer is confirmed alive</li><li>🔧 First-run backend install hardened: bad Python setup can no longer fail silently, errors show what to do</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.1</strong><span>2026-10-15</span></div><ul><li>🔧 One-click update restart fixed and hardened: visible progress, step log, browser never closes unless the installer is confirmed alive</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.1.0</strong><span>2026-10-15</span></div><ul><li>🔧 YouTube with shields on: videos load fast AND ads get muted, sprinted through and skipped automatically</li><li>🔧 Ad-skipper now runs in every tab, on reloads too — and restores your volume and speed after</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.9</strong><span>2026-10-14</span></div><ul><li>🔧 First-run setup fixed: the AI backend now installs on every Python 3 (was failing silently on 3.12 and below)</li><li>🔧 Setup errors are shown on screen with a log file instead of failing quietly</li><li>➕ Account panel: "Reset Google login" button wipes stuck sign-in cookies in one click</li><li>➕ New Setup guide on this site — 5 steps from download to browsing</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.8</strong><span>2026-10-10</span></div><ul><li>🔧 Updates install fully in the background — small progress pill, no scary terminal</li><li>🔧 Shorter wallpaper names so updates never choke on long file paths</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.7</strong><span>2026-10-10</span></div><ul><li>➖ Removed: Performance Dashboard button</li><li>➖ Removed: Docs mode from the search bar (Chat + Google only now)</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.2.2</strong><span>2026-10-31 Â· current</span></div><ul><li>ðŸ›¡ï¸ YouTube ads no longer slip through shields: a document_start defuser strips ad metadata before YouTube's scripts read it, so no ad is ever scheduled and nothing gets detected</li><li>ðŸ›¡ï¸ Shields hardened across tabs, reloads and mirrors â€” same protection in every webview</li></ul></article>
+
+    <article class="change reveal"><div class="change-head"><strong>v1.2.1</strong><span>2026-10-30</span></div><ul><li>âš¡ Pages open noticeably faster â€” history logging no longer does heavy disk work while a page is loading</li><li>âš¡ Smoother browsing â€” removed the 1-pixel resize flicker and a leftover debug writer that ran on every navigation</li><li>ðŸ”§ Fixed sites that glitched: some links double-loaded or lost form data on submit</li><li>ðŸ”§ A crashed background tab no longer reloads the page you are looking at</li><li>ðŸ”§ The update popup now compares against the correct version, so it stops nagging after you update</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.2.0</strong><span>2026-10-17</span></div><ul><li>âž• pic2pdf is now a full PDF Workbench: open, merge, split, extract, rotate, delete, reorder and insert blank pages</li><li>âž• Add page numbers, text watermarks and edit PDF metadata (title, author, subject, keywords)</li><li>ðŸ”’ Everything runs locally â€” your PDFs are never uploaded</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.9</strong><span>2026-10-16</span></div><ul><li>ðŸ”§ No more double-launch backend wars and flashing consoles â€” second launch simply stops, healthy backends are adopted not killed</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.8</strong><span>2026-10-15</span></div><ul><li>ðŸ”§ Update installer fix for PCs where extraction failed to start (missing assembly load)</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.7</strong><span>2026-10-15</span></div><ul><li>âž– Removed: Docs search mode from the home search bar (Chat + Google only now)</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.6</strong><span>2026-10-15</span></div><ul><li>ðŸ”§ Update extractor fixed for long file names â€” no more red errors during update, install finishes clean</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.5</strong><span>2026-10-15</span></div><ul><li>âž– Removed: Docs search mode from the home search bar (Chat + Google only now)</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.4</strong><span>2026-10-15</span></div><ul><li>ðŸ”§ Update download retries past antivirus file holds instead of failing</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.3</strong><span>2026-10-15</span></div><ul><li>ðŸ  Classic build release: the exact v1.0.6 experience (login system untouched) â€” only the backend first-run install and the update checker repaired</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.2</strong><span>2026-10-15</span></div><ul><li>ðŸ”§ One-click update restart really fixed: the installer could die silently before replacing files â€” now it logs every step and the browser only restarts once the installer is confirmed alive</li><li>ðŸ”§ First-run backend install hardened: bad Python setup can no longer fail silently, errors show what to do</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.1</strong><span>2026-10-15</span></div><ul><li>ðŸ”§ One-click update restart fixed and hardened: visible progress, step log, browser never closes unless the installer is confirmed alive</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.1.0</strong><span>2026-10-15</span></div><ul><li>ðŸ”§ YouTube with shields on: videos load fast AND ads get muted, sprinted through and skipped automatically</li><li>ðŸ”§ Ad-skipper now runs in every tab, on reloads too â€” and restores your volume and speed after</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.9</strong><span>2026-10-14</span></div><ul><li>ðŸ”§ First-run setup fixed: the AI backend now installs on every Python 3 (was failing silently on 3.12 and below)</li><li>ðŸ”§ Setup errors are shown on screen with a log file instead of failing quietly</li><li>âž• Account panel: "Reset Google login" button wipes stuck sign-in cookies in one click</li><li>âž• New Setup guide on this site â€” 5 steps from download to browsing</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.8</strong><span>2026-10-10</span></div><ul><li>ðŸ”§ Updates install fully in the background â€” small progress pill, no scary terminal</li><li>ðŸ”§ Shorter wallpaper names so updates never choke on long file paths</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.7</strong><span>2026-10-10</span></div><ul><li>âž– Removed: Performance Dashboard button</li><li>âž– Removed: Docs mode from the search bar (Chat + Google only now)</li></ul></article>
     <article class="change reveal"><div class="change-head"><strong>v1.0.6</strong><span>2026-10-10</span></div><ul><li>Proved auto-update end-to-end on an untouched public download</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.5</strong><span>2026-10-10</span></div><ul><li>➕ One-click updates: download with live progress, restart to install — tabs and data untouched</li><li>➖ Removed: YouTube Ad Skipper button and its full engine (Downloader stays)</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.4</strong><span>2026-10-10</span></div><ul><li>➕ Chrome-style update popup with release notes when a new version drops</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.3</strong><span>2026-10-10</span></div><ul><li>➕ First-run setup installs real Python automatically (ignores the fake Store shortcut)</li><li>➕ Ollama + free offline AI model install hands-free</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.2</strong><span>2026-10-10</span></div><ul><li>➕ AI backend starts with zero setup — no keys, accounts or files to edit</li><li>➕ Free offline AI configured on first launch</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.1</strong><span>2026-10-10</span></div><ul><li>🔧 Links like mail.google.com and localhost open correctly instead of misfiring search</li><li>🏠 New users start on the same home screen shown on this site</li></ul></article>
-    <article class="change reveal"><div class="change-head"><strong>v1.0.0</strong><span>2026-10-10</span></div><ul><li>🎉 First public release: vertical tabs, Stage Manager previews, ESTA AI, locked history, 1-click calls</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.5</strong><span>2026-10-10</span></div><ul><li>âž• One-click updates: download with live progress, restart to install â€” tabs and data untouched</li><li>âž– Removed: YouTube Ad Skipper button and its full engine (Downloader stays)</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.4</strong><span>2026-10-10</span></div><ul><li>âž• Chrome-style update popup with release notes when a new version drops</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.3</strong><span>2026-10-10</span></div><ul><li>âž• First-run setup installs real Python automatically (ignores the fake Store shortcut)</li><li>âž• Ollama + free offline AI model install hands-free</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.2</strong><span>2026-10-10</span></div><ul><li>âž• AI backend starts with zero setup â€” no keys, accounts or files to edit</li><li>âž• Free offline AI configured on first launch</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.1</strong><span>2026-10-10</span></div><ul><li>ðŸ”§ Links like mail.google.com and localhost open correctly instead of misfiring search</li><li>ðŸ  New users start on the same home screen shown on this site</li></ul></article>
+    <article class="change reveal"><div class="change-head"><strong>v1.0.0</strong><span>2026-10-10</span></div><ul><li>ðŸŽ‰ First public release: vertical tabs, Stage Manager previews, ESTA AI, locked history, 1-click calls</li></ul></article>
   </div>
 </section>
 
@@ -235,7 +237,7 @@
   <h2>READY TO EXPLORE<br>WHAT'S NEXT?</h2>
   <p class="sub">Get NEXORA Browser and experience a new approach to desktop browsing.</p>
   <div class="dl-card">
-    <div class="dl-info" id="dlInfo"><strong>Latest: v1.2.1</strong><span class="dl-meta">Portable ZIP · 339 MB · Windows x64</span><span>Extract it, open the "NEXORA Browser" folder, run launch.bat — download NEXORA only from official release sources.</span></div>
+    <div class="dl-info" id="dlInfo"><strong>Latest: v1.2.2</strong><span class="dl-meta">Portable ZIP Â· 339 MB Â· Windows x64</span><span>Extract it, open the "NEXORA Browser" folder, run launch.bat â€” download NEXORA only from official release sources.</span></div>
     <div class="cta-row">
       <button class="btn btn-primary btn-lg" data-download>Download for Windows</button>
       <button class="btn btn-outline btn-lg" data-github>View Source on GitHub</button>
@@ -249,18 +251,18 @@
   <h2>UP AND RUNNING<br>IN 5 STEPS.</h2>
   <p class="sub">No required account or API key. First launch downloads and installs the AI components, so allow extra time.</p>
   <div class="setup-showcase" id="setupShowcase" aria-roledescription="carousel" aria-label="Setup guide slideshow">
-    <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">NEXORA · SETUP GUIDE</span></div><div class="showcase-screen"><div class="setup-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
+    <div class="showcase-bezel"><div class="showcase-topbar"><span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span><span class="showcase-label">NEXORA Â· SETUP GUIDE</span></div><div class="showcase-screen"><div class="setup-screen-content"></div><span class="screen-reflection" aria-hidden="true"></span></div></div>
     <div class="showcase-neck" aria-hidden="true"></div><div class="showcase-base" aria-hidden="true"></div>
     <div class="showcase-caption"><strong class="setup-title"></strong><span class="setup-summary"></span></div>
-    <div class="showcase-controls"><button type="button" id="setupPrev" aria-label="Previous setup step">‹</button><div class="showcase-dots" id="setupDots" role="tablist" aria-label="Setup steps"></div><button type="button" id="setupNext" aria-label="Next setup step">›</button><span class="step-indicator" id="setupIndicator">1 / 5</span></div>
+    <div class="showcase-controls"><button type="button" id="setupPrev" aria-label="Previous setup step">â€¹</button><div class="showcase-dots" id="setupDots" role="tablist" aria-label="Setup steps"></div><button type="button" id="setupNext" aria-label="Next setup step">â€º</button><span class="step-indicator" id="setupIndicator">1 / 5</span></div>
   </div>
   <div class="cards">
-    <article class="card reveal"><div class="card-ico">⬇️</div><h3>1 · Download the ZIP</h3><p>Hit <strong>Download for Windows</strong> above — Windows 10/11, 64-bit. You need internet once and about 2&nbsp;GB free (browser + AI model).</p></article>
-    <article class="card reveal"><div class="card-ico">📂</div><h3>2 · Extract it anywhere</h3><p>Right-click the ZIP → <strong>Extract All</strong>. Open the <strong>"NEXORA Browser"</strong> folder inside.</p></article>
-    <article class="card reveal"><div class="card-ico">▶️</div><h3>3 · Double-click launch.bat</h3><p>First run may take longer: it finds or installs Python, sets up the AI pieces, then installs Ollama and downloads the free offline AI model (one time only).</p></article>
-    <article class="card reveal"><div class="card-ico">🌐</div><h3>4 · Browse — AI included</h3><p>The browser opens by itself. ESTA chat works out of the box, even with no internet, thanks to the on-device model.</p></article>
-    <article class="card reveal"><div class="card-ico">☁️</div><h3>5 · Cloud AI (optional)</h3><p>Want the smarter cloud chat too? Grab a free key at <strong>console.groq.com</strong>, paste it as <strong>GROQ_API_KEY=…</strong> in <strong>ai UI DESIGN\backend\.env</strong>, and re-run launch.bat.</p></article>
-    <article class="card reveal"><div class="card-ico">🛟</div><h3>Stuck? 3 quick fixes</h3><p><strong>SmartScreen warning</strong> → More info → Run anyway (we're not signed yet). <strong>"Backend FAILED"</strong> → open <strong>pip-install.log</strong> next to launch.bat, the last lines say why (usually no internet — just re-run). <strong>Nothing opens</strong> → close any other NEXORA window first; two copies can't share one profile.</p></article>
+    <article class="card reveal"><div class="card-ico">â¬‡ï¸</div><h3>1 Â· Download the ZIP</h3><p>Hit <strong>Download for Windows</strong> above â€” Windows 10/11, 64-bit. You need internet once and about 2&nbsp;GB free (browser + AI model).</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ“‚</div><h3>2 Â· Extract it anywhere</h3><p>Right-click the ZIP â†’ <strong>Extract All</strong>. Open the <strong>"NEXORA Browser"</strong> folder inside.</p></article>
+    <article class="card reveal"><div class="card-ico">â–¶ï¸</div><h3>3 Â· Double-click launch.bat</h3><p>First run may take longer: it finds or installs Python, sets up the AI pieces, then installs Ollama and downloads the free offline AI model (one time only).</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸŒ</div><h3>4 Â· Browse â€” AI included</h3><p>The browser opens by itself. ESTA chat works out of the box, even with no internet, thanks to the on-device model.</p></article>
+    <article class="card reveal"><div class="card-ico">â˜ï¸</div><h3>5 Â· Cloud AI (optional)</h3><p>Want the smarter cloud chat too? Grab a free key at <strong>console.groq.com</strong>, paste it as <strong>GROQ_API_KEY=â€¦</strong> in <strong>ai UI DESIGN\backend\.env</strong>, and re-run launch.bat.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ›Ÿ</div><h3>Stuck? 3 quick fixes</h3><p><strong>SmartScreen warning</strong> â†’ More info â†’ Run anyway (we're not signed yet). <strong>"Backend FAILED"</strong> â†’ open <strong>pip-install.log</strong> next to launch.bat, the last lines say why (usually no internet â€” just re-run). <strong>Nothing opens</strong> â†’ close any other NEXORA window first; two copies can't share one profile.</p></article>
   </div>
   <p class="fine">Every rerun of launch.bat is safe: it skips what's already installed and only fixes what's missing.</p>
 </section>
@@ -270,10 +272,10 @@
   <p class="kicker">Privacy &amp; Security</p>
   <h2>YOUR BROWSER DESERVES TRANSPARENCY.</h2>
   <div class="cards two">
-    <article class="card reveal"><div class="card-ico">💾</div><h3>Local-first data</h3><p>History, downloads, permissions and settings live in your own profile folder on your PC — not on our servers. Sync only happens if you create a NEXORA account and turn it on.</p></article>
-    <article class="card reveal"><div class="card-ico">🔐</div><h3>You hold the keys</h3><p>Your browsing history page is guarded by a password you set. Per-site camera, mic and screen permissions can be allowed or blocked at any time.</p></article>
-    <article class="card reveal"><div class="card-ico">🧹</div><h3>Less tracking surface</h3><p>Built-in ad &amp; tracker blocking and AI-assisted phishing warnings reduce common web annoyances and traps. No browsing analytics are collected by the browser itself.</p></article>
-    <article class="card reveal"><div class="card-ico">🔍</div><h3>Honest security status</h3><p>NEXORA is pre-release software. Independent security verification is incomplete, so we make no "unhackable" claims. Found an issue? Report it — contact details will be published with the first release.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ’¾</div><h3>Local-first data</h3><p>History, downloads, permissions and settings live in your own profile folder on your PC â€” not on our servers. Sync only happens if you create a NEXORA account and turn it on.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ”</div><h3>You hold the keys</h3><p>Your browsing history page is guarded by a password you set. Per-site camera, mic and screen permissions can be allowed or blocked at any time.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ§¹</div><h3>Less tracking surface</h3><p>Built-in ad &amp; tracker blocking and AI-assisted phishing warnings reduce common web annoyances and traps. No browsing analytics are collected by the browser itself.</p></article>
+    <article class="card reveal"><div class="card-ico">ðŸ”</div><h3>Honest security status</h3><p>NEXORA is pre-release software. Independent security verification is incomplete, so we make no "unhackable" claims. Found an issue? Report it â€” contact details will be published with the first release.</p></article>
   </div>
   <p class="fine">Privacy Policy and Security Policy documents will be published alongside the first public release.</p>
 </section>
@@ -284,12 +286,12 @@
   <h2>QUESTIONS, ANSWERED.</h2>
   <div class="faq">
     <details class="reveal"><summary>Which operating systems will NEXORA support?</summary><p>The first official installer targets Windows 64-bit. Other platforms have not been announced yet.</p></details>
-    <details class="reveal"><summary>Is NEXORA Browser free?</summary><p>Yes — the browser is planned as a free download, with its source code published on GitHub.</p></details>
-    <details class="reveal"><summary>Where do I download it safely?</summary><p>Only from the official release page linked on this site — the Download button above points straight at it. Never trust third-party "NEXORA installers".</p></details>
-    <details class="reveal"><summary>Does ESTA AI send my browsing to the cloud?</summary><p>ESTA runs through the NEXORA backend on your own PC, including an offline on-device chat mode. Cloud model providers are never mandatory — check the release notes for the default configuration.</p></details>
-    <details class="reveal"><summary>Does NEXORA update itself?</summary><p>Yes. NEXORA checks for new releases when it starts and pops up what's new. One click downloads it, another restarts into the new version — your tabs and data stay safe, just like Chrome.</p></details>
-    <details class="reveal"><summary>Do I need API keys or accounts to use the AI?</summary><p>No. The first launch sets up the free offline AI on your PC automatically — no keys, no sign-ups, no files to edit. A Groq API key is purely optional for cloud chat.</p></details>
-    <details class="reveal"><summary>How does the history password work?</summary><p>Set it in Settings → History Lock. The full history page then asks for that password before showing anything. Turn the lock off and it opens directly.</p></details>
+    <details class="reveal"><summary>Is NEXORA Browser free?</summary><p>Yes â€” the browser is planned as a free download, with its source code published on GitHub.</p></details>
+    <details class="reveal"><summary>Where do I download it safely?</summary><p>Only from the official release page linked on this site â€” the Download button above points straight at it. Never trust third-party "NEXORA installers".</p></details>
+    <details class="reveal"><summary>Does ESTA AI send my browsing to the cloud?</summary><p>ESTA runs through the NEXORA backend on your own PC, including an offline on-device chat mode. Cloud model providers are never mandatory â€” check the release notes for the default configuration.</p></details>
+    <details class="reveal"><summary>Does NEXORA update itself?</summary><p>Yes. NEXORA checks for new releases when it starts and pops up what's new. One click downloads it, another restarts into the new version â€” your tabs and data stay safe, just like Chrome.</p></details>
+    <details class="reveal"><summary>Do I need API keys or accounts to use the AI?</summary><p>No. The first launch sets up the free offline AI on your PC automatically â€” no keys, no sign-ups, no files to edit. A Groq API key is purely optional for cloud chat.</p></details>
+    <details class="reveal"><summary>How does the history password work?</summary><p>Set it in Settings â†’ History Lock. The full history page then asks for that password before showing anything. Turn the lock off and it opens directly.</p></details>
     <details class="reveal"><summary>Can I trust pre-release software with my logins?</summary><p>Be sensible: NEXORA stores logins with your OS-level browser profile like other Chromium browsers, but independent security review is still pending. Use a password manager and unique passwords everywhere.</p></details>
   </div>
 </section>
@@ -302,7 +304,7 @@
     <nav class="foot-links" aria-label="Footer">
       <a href="#features">Features</a><a href="#esta">ESTA</a><a href="#screens">Screenshots</a><a href="#download">Download</a><a href="#setup">Setup</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a>
     </nav>
-    <p class="fine">© 2026 NEXORA. Free browser, open source — policies publish with the next milestone.</p>
+    <p class="fine">Â© 2026 NEXORA. Free browser, open source â€” policies publish with the next milestone.</p>
   </div>
 </footer>
 
