@@ -16,11 +16,8 @@
   /* ---------- tour content (accurate to this site) ---------- */
   var CHAPTERS = [
     { id: 'welcome', title: 'What is NEXORA', ico: '✦', anchor: 'top', lines: [
-      'Welcome to NEXORA Browser — the web, reimagined.',
-      'NEXORA is a free, open-source desktop browser for Windows, created by Hishan Khan.',
-      'It pairs fast Chromium browsing with built-in AI, handy productivity tools, and deep customization.',
-      'I am your AI guide, and I will walk you through everything in about two minutes.',
-      'You can stop me anytime with the Stop button, or tap any topic to jump straight to it.'
+      'Welcome to NEXORA — a free, open-source AI browser for Windows, built by the NEXORA team.',
+      'Tap any topic below and I will explain it, or press Next to go step by step. Stop me anytime.'
     ]},
     { id: 'features', title: 'Features', ico: '🧰', anchor: 'features', lines: [
       'Let us start with what makes NEXORA different.',
@@ -68,7 +65,7 @@
       'Ready to explore? Hit the Download button and enjoy the web, reimagined.'
     ]}
   ];
-  var INTRO = 'Hi! I am your NEXORA AI guide. Press “Explain Guide” and I will walk you through everything with voice — or tap any topic below to jump straight to it. Stop me anytime.';
+  var INTRO = 'Hi! I am your NEXORA AI guide. Press “Explain Guide” for a quick intro, then tap any topic to hear the details. Stop me anytime.';
   var OUTRO = 'That is the full tour! NEXORA is free, open source, and ready when you are. Hit Download to get started — enjoy the web, reimagined.';
 
   var offsets = [], total = 0;
@@ -79,7 +76,7 @@
   var ci = 0, si = 0;           // chapter / sentence index
   var gen = 0;                  // generation guard for async speech callbacks
   var finished = false;
-  var muted = false, vol = 1, rate = 1, follow = true;
+  var muted = false, vol = 1, rate = 1, follow = true, autoPlay = false;
   var voices = [], voice = null, fbTimer = null;
   var visited = {};
 
@@ -113,6 +110,7 @@
           '<label class="ng-field"><span>Speed <b id="ngRateVal">1.0×</b></span><input id="ngRate" type="range" min="0.6" max="1.6" step="0.1" value="1" aria-label="Speech speed"></label>' +
           '<label class="ng-field"><span>Volume <b id="ngVolVal">100%</b></span><input id="ngVol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Speech volume"></label>' +
           '<label class="ng-toggle"><input type="checkbox" id="ngFollow" checked><span class="ng-switch" aria-hidden="true"></span><span>Follow along on the page</span></label>' +
+          '<label class="ng-toggle"><input type="checkbox" id="ngAuto"><span class="ng-switch" aria-hidden="true"></span><span>Auto-play all topics</span></label>' +
         '</div>' +
         '<p class="ng-foot" id="ngFoot"></p>' +
       '</div>' +
@@ -133,7 +131,7 @@
       prevBtn = $('ngPrev'), playBtn = $('ngPlay'), playIco = $('ngPlayIco'), playTxt = $('ngPlayTxt'),
       stopBtn = $('ngStop'), nextBtn = $('ngNext'), replayBtn = $('ngReplay'),
       voiceSel = $('ngVoice'), rateIn = $('ngRate'), rateVal = $('ngRateVal'),
-      volIn = $('ngVol'), volVal = $('ngVolVal'), followIn = $('ngFollow'), foot = $('ngFoot');
+      volIn = $('ngVol'), volVal = $('ngVolVal'), followIn = $('ngFollow'), autoIn = $('ngAuto'), foot = $('ngFoot');
 
   foot.textContent = supported
     ? 'Voice uses your browser’s built-in speech. Nothing is recorded or sent anywhere.'
@@ -255,6 +253,7 @@
     var c = CHAPTERS[ci];
     renderChapter(ci);
     setActiveSentence(ci, si);
+    setStatus('Speaking · ' + c.title);
     visited[ci] = true; chapBtns[ci].classList.add('ng-visited');
     if (si === 0) followTo(c.anchor);
     var text = c.lines[si];
@@ -289,10 +288,45 @@
   function advance() {
     si++;
     if (si >= CHAPTERS[ci].lines.length) {
-      ci++; si = 0;
-      if (ci >= CHAPTERS.length) { finish(); return; }
+      if (autoPlay) {
+        ci++; si = 0;
+        if (ci >= CHAPTERS.length) { finish(); return; }
+        speakCurrent();
+      } else {
+        endTopic();
+      }
+      return;
     }
     speakCurrent();
+  }
+
+  /* On-demand: a topic finished — stop and wait for the user to pick the next. */
+  function endTopic() {
+    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    var done = ci;
+    chapBtns[done].classList.add('ng-visited');
+    si = 0;
+    if (done >= CHAPTERS.length - 1) {
+      finished = true;
+      setMode('idle');
+      chapNum.textContent = ('0' + CHAPTERS.length).slice(-2) + ' / ' + ('0' + CHAPTERS.length).slice(-2);
+      chapTitle.textContent = '🎉 All topics covered';
+      caption.textContent = 'That is everything! Tap any topic to hear it again, or press ↻ to start over.';
+      bar.style.width = '100%';
+      chapBtns.forEach(function (b) { b.classList.remove('ng-active'); b.setAttribute('aria-selected', 'false'); });
+      setStatus('All topics covered — pick one to replay');
+      return;
+    }
+    ci = done + 1;
+    setMode('idle');
+    chapNum.textContent = ('0' + (ci + 1)).slice(-2) + ' / ' + ('0' + CHAPTERS.length).slice(-2);
+    chapTitle.textContent = CHAPTERS[ci].ico + ' ' + CHAPTERS[ci].title;
+    caption.textContent = done === 0
+      ? 'That is NEXORA in brief! Tap any topic below for the details, or press Explain Guide to continue step by step.'
+      : 'Ready for “' + CHAPTERS[ci].title + '”. Press Explain Guide, or tap any topic below.';
+    bar.style.width = ((offsets[ci] / total) * 100).toFixed(1) + '%';
+    chapBtns.forEach(function (b, k) { b.classList.toggle('ng-active', k === ci); b.setAttribute('aria-selected', k === ci ? 'true' : 'false'); });
+    setStatus(done === 0 ? 'Pick a topic — I will explain it' : 'Up next · ' + CHAPTERS[ci].title);
   }
 
   function startFrom(i, k) {
@@ -431,6 +465,7 @@
     if (vol === 0 && !muted) { muted = true; muteBtn.textContent = '🔇'; muteBtn.setAttribute('aria-pressed', 'true'); }
   });
   followIn.addEventListener('change', function () { follow = followIn.checked; });
+  autoIn.addEventListener('change', function () { autoPlay = autoIn.checked; });
 
   /* ---------- init ---------- */
   showIntro();
