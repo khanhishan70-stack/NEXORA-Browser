@@ -73,6 +73,9 @@
     });
   }
 
+  // Runs before liveDownloads so its dlInfo rewrite cannot wipe the counter line.
+  wireButtons();
+
   // ---- Scroll progress ----
   var prog = document.getElementById('progress');
   function onScroll() {
@@ -99,14 +102,17 @@
     fetch('https://api.github.com/repos/' + repo + '/releases?per_page=20')
       .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
       .then(function (rels) {
-        var total = 0, latest = 0;
-        (rels || []).forEach(function (rel, i) {
+        var total = 0, version = 0;
+        var tag = cfg.releaseInfo && cfg.releaseInfo.version ? 'v' + cfg.releaseInfo.version : null;
+        (rels || []).forEach(function (rel) {
           var n = 0;
           (rel.assets || []).forEach(function (a) { n += Number(a.download_count || 0); });
           total += n;
-          if (i === 0) latest = n;
+          if (tag && rel.tag_name === tag) version = n;
         });
-        line.textContent = 'Downloaded ' + total.toLocaleString('en-US') + ' times in total (' + latest.toLocaleString('en-US') + ' on the latest release) — live from GitHub.';
+        line.textContent = 'Downloaded ' + total.toLocaleString('en-US') + ' times in total'
+          + (tag ? ' (' + version.toLocaleString('en-US') + ' on ' + tag + ')' : '')
+          + ' — live from GitHub.';
       })
       .catch(function () {
         line.textContent = '';
@@ -411,6 +417,4 @@
     updateSlide();
     setPhase('off', 'Monitor is off · Press Power to show the desktop');
   }());
-
-  wireButtons();
 })();

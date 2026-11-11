@@ -323,8 +323,10 @@ h2 { max-width: 860px; font-size: clamp(32px, 3.4vw, 49px); }
 .foot-inner { max-width: 1280px; gap: 22px; }
 .foot-links { column-gap: 23px; row-gap: 10px; }
 
-/* Landscape proportions on the three displays, with room for real feature copy. */
-.monitor-wall .showcase-screen { min-height: 250px; aspect-ratio: 16 / 11; }
+/* Landscape proportions on the three displays, with room for real feature copy.
+   No aspect-ratio here: combined with min-height it forces the screen wider than
+   its bezel on narrow columns and overflows the page. */
+.monitor-wall .showcase-screen { min-height: 250px; }
 .showcase-dots { max-width: 200px; flex-wrap: wrap; justify-content: center; }
 .dl-info span, .change li, .faq p { overflow-wrap: anywhere; }
 

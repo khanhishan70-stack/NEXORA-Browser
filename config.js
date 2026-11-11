@@ -1,5 +1,5 @@
 ﻿/* ============================================================
- * NEXORA Website configuration â€” EDIT THESE WHEN GOING PUBLIC
+ * NEXORA Website configuration — EDIT THESE WHEN GOING PUBLIC
  * ------------------------------------------------------------
  * Until the real URLs below are filled in, download buttons stay
  * disabled ("Coming Soon") and GitHub buttons show a notice instead
@@ -8,13 +8,13 @@
 window.NEXORA_SITE = {
   githubRepoUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser",
 
-  releasesUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest",
+  releasesUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/tag/v1.0.8",
 
-  // Portable ZIP, evergreen URL (no per-version edits needed):
+  // Portable ZIP pinned to the published v1.0.8 build:
   // extract, open "NEXORA Browser", run launch.bat (or NEXORA.exe).
-  windowsInstallerUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/latest/download/NEXORA-Browser-Windows-x64.zip",
+  windowsInstallerUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/download/v1.0.8/NEXORA-Browser-Windows-x64.zip",
 
-  releaseInfo: { version: "1.2.2", date: "2026-10-31", size: "339 MB", arch: "Windows x64" },
+  releaseInfo: { version: "1.0.8", date: "2026-10-10", size: "338 MB", arch: "Windows x64" },
 
   // Contact for security reports, when available.
   securityContact: "",
