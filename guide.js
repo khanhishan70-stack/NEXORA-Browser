@@ -1,0 +1,438 @@
+/* ============================================================
+ * NEXORA — AI Guide engine
+ * A voice-narrated tour of the site + browser, built on the Web
+ * Speech API. Self-contained: builds its own UI, no dependencies.
+ * Degrades to a timed text tour when speech is unavailable.
+ * ============================================================ */
+(function () {
+  'use strict';
+  if (document.getElementById('nexGuide')) return;
+
+  var motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function reducedMotion() { return !!(motionQuery && motionQuery.matches); }
+  var synth = window.speechSynthesis || null;
+  var supported = !!(synth && typeof window.SpeechSynthesisUtterance === 'function');
+
+  /* ---------- tour content (accurate to this site) ---------- */
+  var CHAPTERS = [
+    { id: 'welcome', title: 'What is NEXORA', ico: '✦', anchor: 'top', lines: [
+      'Welcome to NEXORA Browser — the web, reimagined.',
+      'NEXORA is a free, open-source desktop browser for Windows, created by Hishan Khan.',
+      'It pairs fast Chromium browsing with built-in AI, handy productivity tools, and deep customization.',
+      'I am your AI guide, and I will walk you through everything in about two minutes.',
+      'You can stop me anytime with the Stop button, or tap any topic to jump straight to it.'
+    ]},
+    { id: 'features', title: 'Features', ico: '🧰', anchor: 'features', lines: [
+      'Let us start with what makes NEXORA different.',
+      'A slim vertical tab rail keeps every site one click away, and hovering a tab fans out live previews so you can recognise any page at a glance.',
+      'Your history is grouped by day and protected by your own password.',
+      'Calls just work — one button handles camera, microphone and screen sharing for Meet, Discord and WhatsApp.',
+      'Built-in shields block ads and trackers and warn you about phishing.',
+      'And the toolbox rail docks a translator, volume boost, hands-free voice, a Pomodoro timer, a video editor and more on the right.'
+    ]},
+    { id: 'esta', title: 'ESTA AI', ico: '✨', anchor: 'esta', lines: [
+      'Meet ESTA, your AI browsing companion.',
+      'ESTA lives in a side panel, so you can chat, summarize the page you are reading, get coding help, or study without leaving your tab.',
+      'It runs through the NEXORA backend on your own PC, and it even keeps working offline with an on-device model.',
+      'Cloud AI is optional, never required.'
+    ]},
+    { id: 'install', title: 'How to install', ico: '⬇️', anchor: 'setup', lines: [
+      'Getting started takes five easy steps.',
+      'First, download the ZIP — it is about 246 megabytes for Windows 64-bit.',
+      'Next, right-click and Extract All, then open the NEXORA Browser folder.',
+      'Double-click launch dot bat; the first run sets up Python and the AI backend for you automatically.',
+      'The browser then opens by itself.',
+      'Offline AI is optional — NEXORA asks before downloading anything large, so you stay in control of your disk space.'
+    ]},
+    { id: 'usage', title: 'How to use it', ico: '🖱️', anchor: 'features', lines: [
+      'Here is how to use NEXORA day to day.',
+      'Click the vertical rail on the left to switch sites, and hover any tab to preview it.',
+      'Open ESTA from the side panel to ask questions about whatever you are reading.',
+      'On any YouTube watch page, one button saves the video from 360p up to 4K, or just the MP3 audio.',
+      'Set a history password in Settings to keep your browsing private, and make it yours with custom wallpapers and themes.',
+      'Every rerun of launch dot bat is safe — it skips whatever is already installed.'
+    ]},
+    { id: 'privacy', title: 'Privacy & safety', ico: '🛡️', anchor: 'privacy', lines: [
+      'Your privacy comes first.',
+      'History, downloads, permissions and settings live in your own profile folder on your PC, not on our servers.',
+      'Sync only happens if you create a NEXORA account and turn it on.',
+      'You hold the keys — your history is password-guarded, and per-site permissions are yours to allow or block.',
+      'And we are honest: NEXORA is pre-release software, so we make no unhackable claims.'
+    ]},
+    { id: 'faq', title: 'Good to know', ico: '💡', anchor: 'faq', lines: [
+      'A few quick answers before you go.',
+      'NEXORA is free and open source, with the first official build for Windows 64-bit.',
+      'Always download from the official release page linked on this site — never trust third-party installers.',
+      'NEXORA updates itself like Chrome: one click downloads, another restarts, and your tabs stay safe.',
+      'No API keys or accounts are required for the AI.',
+      'Ready to explore? Hit the Download button and enjoy the web, reimagined.'
+    ]}
+  ];
+  var INTRO = 'Hi! I am your NEXORA AI guide. Press “Explain Guide” and I will walk you through everything with voice — or tap any topic below to jump straight to it. Stop me anytime.';
+  var OUTRO = 'That is the full tour! NEXORA is free, open source, and ready when you are. Hit Download to get started — enjoy the web, reimagined.';
+
+  var offsets = [], total = 0;
+  CHAPTERS.forEach(function (c) { offsets.push(total); total += c.lines.length; });
+
+  /* ---------- state ---------- */
+  var mode = 'idle';            // idle | speaking | paused
+  var ci = 0, si = 0;           // chapter / sentence index
+  var gen = 0;                  // generation guard for async speech callbacks
+  var finished = false;
+  var muted = false, vol = 1, rate = 1, follow = true;
+  var voices = [], voice = null, fbTimer = null;
+  var visited = {};
+
+  /* ---------- build UI ---------- */
+  var root = document.createElement('div');
+  root.id = 'nexGuide';
+  root.className = 'ng-root';
+  root.setAttribute('data-open', 'false');
+  root.setAttribute('data-state', 'idle');
+  root.innerHTML =
+    '<button class="ng-fab" id="ngFab" aria-label="Open NEXORA AI Guide" aria-expanded="false" aria-controls="ngPanel">' +
+      '<span class="ng-fab-orb" aria-hidden="true"></span><span class="ng-fab-label">AI Guide</span>' +
+    '</button>' +
+    '<section class="ng-panel" id="ngPanel" role="dialog" aria-label="NEXORA AI Guide" aria-modal="false" hidden>' +
+      '<header class="ng-head">' +
+        '<div class="ng-avatar" aria-hidden="true"><span class="ng-avatar-orb"></span><span class="ng-avatar-ring"></span></div>' +
+        '<div class="ng-head-txt"><strong>NEXORA AI Guide</strong><span class="ng-status" id="ngStatus" role="status" aria-live="polite">Ready to guide you</span></div>' +
+        '<button class="ng-icon-btn" id="ngMute" aria-pressed="false" aria-label="Mute voice" title="Mute / unmute voice">🔊</button>' +
+        '<button class="ng-icon-btn" id="ngClose" aria-label="Close guide" title="Close">×</button>' +
+      '</header>' +
+      '<div class="ng-scroll">' +
+        '<div class="ng-viz"><canvas id="ngViz" aria-hidden="true"></canvas><span class="ng-viz-tag">voice</span></div>' +
+        '<div class="ng-now">' +
+          '<div class="ng-now-top"><span class="ng-chap-num" id="ngChapNum">00 / 0' + CHAPTERS.length + '</span><strong class="ng-chap-title" id="ngChapTitle">Welcome</strong></div>' +
+          '<p class="ng-caption" id="ngCaption" aria-live="polite"></p>' +
+        '</div>' +
+        '<div class="ng-progress"><div class="ng-progress-bar" id="ngBar"></div></div>' +
+        '<div class="ng-chapters" id="ngChapters" role="tablist" aria-label="Guide topics"></div>' +
+        '<div class="ng-controls">' +
+          '<label class="ng-field ng-field-voice"><span>Voice</span><select id="ngVoice" aria-label="Narration voice"></select></label>' +
+          '<label class="ng-field"><span>Speed <b id="ngRateVal">1.0×</b></span><input id="ngRate" type="range" min="0.6" max="1.6" step="0.1" value="1" aria-label="Speech speed"></label>' +
+          '<label class="ng-field"><span>Volume <b id="ngVolVal">100%</b></span><input id="ngVol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Speech volume"></label>' +
+          '<label class="ng-toggle"><input type="checkbox" id="ngFollow" checked><span class="ng-switch" aria-hidden="true"></span><span>Follow along on the page</span></label>' +
+        '</div>' +
+        '<p class="ng-foot" id="ngFoot"></p>' +
+      '</div>' +
+      '<div class="ng-transport">' +
+        '<button class="ng-icon-btn" id="ngPrev" aria-label="Previous topic" title="Previous topic">⏮</button>' +
+        '<button class="ng-play" id="ngPlay" aria-label="Explain guide"><span id="ngPlayIco" aria-hidden="true">▶</span><span id="ngPlayTxt">Explain Guide</span></button>' +
+        '<button class="ng-stop" id="ngStop" aria-label="Stop guide" title="Stop" disabled><span aria-hidden="true">⏹</span><span>Stop</span></button>' +
+        '<button class="ng-icon-btn" id="ngNext" aria-label="Next topic" title="Next topic">⏭</button>' +
+        '<button class="ng-icon-btn" id="ngReplay" aria-label="Replay from start" title="Replay from start">↻</button>' +
+      '</div>' +
+    '</section>';
+  document.body.appendChild(root);
+
+  var $ = function (id) { return document.getElementById(id); };
+  var fab = $('ngFab'), panel = $('ngPanel'), statusEl = $('ngStatus'), muteBtn = $('ngMute'),
+      closeBtn = $('ngClose'), chapNum = $('ngChapNum'), chapTitle = $('ngChapTitle'),
+      caption = $('ngCaption'), bar = $('ngBar'), chaptersEl = $('ngChapters'),
+      prevBtn = $('ngPrev'), playBtn = $('ngPlay'), playIco = $('ngPlayIco'), playTxt = $('ngPlayTxt'),
+      stopBtn = $('ngStop'), nextBtn = $('ngNext'), replayBtn = $('ngReplay'),
+      voiceSel = $('ngVoice'), rateIn = $('ngRate'), rateVal = $('ngRateVal'),
+      volIn = $('ngVol'), volVal = $('ngVolVal'), followIn = $('ngFollow'), foot = $('ngFoot');
+
+  foot.textContent = supported
+    ? 'Voice uses your browser’s built-in speech. Nothing is recorded or sent anywhere.'
+    : 'Voice isn’t supported in this browser — the guide will read as text instead.';
+  if (!supported) foot.classList.add('ng-warn');
+
+  /* chapter chips */
+  CHAPTERS.forEach(function (c, i) {
+    var b = document.createElement('button');
+    b.className = 'ng-chap'; b.type = 'button'; b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', 'false'); b.dataset.i = i;
+    b.innerHTML = '<span class="ng-chap-ico" aria-hidden="true">' + c.ico + '</span><span>' + c.title + '</span>';
+    b.addEventListener('click', function () { jumpTo(i); });
+    chaptersEl.appendChild(b);
+  });
+  var chapBtns = Array.prototype.slice.call(chaptersEl.children);
+
+  /* ---------- voices ---------- */
+  function scoreVoice(v) {
+    var n = (v.name || '').toLowerCase(), s = 0;
+    if (/natural|online|neural/.test(n)) s += 4;
+    if (/google/.test(n)) s += 3;
+    if (/aria|zira|samantha|female|jenny|libby|sonia/.test(n)) s += 2;
+    if (/uk|en-gb/.test(n + ' ' + (v.lang || '').toLowerCase())) s += 1;
+    if (/microsoft/.test(n)) s += 1;
+    return s;
+  }
+  function loadVoices() {
+    if (!supported) { voiceSel.disabled = true; voiceSel.innerHTML = '<option>Text-only mode</option>'; return; }
+    var all = synth.getVoices() || [];
+    voices = all.filter(function (v) { return /^en/i.test(v.lang || ''); });
+    if (!voices.length) voices = all.slice();
+    voices.sort(function (a, b) { return scoreVoice(b) - scoreVoice(a); });
+    var keep = voiceSel.value;
+    voiceSel.innerHTML = '';
+    if (!voices.length) { var o = document.createElement('option'); o.textContent = 'Default voice'; voiceSel.appendChild(o); return; }
+    voices.forEach(function (v) {
+      var o = document.createElement('option');
+      o.value = v.voiceURI; o.textContent = v.name.replace(/\s*\(.*?\)\s*/g, ' ').trim() + ' · ' + v.lang;
+      voiceSel.appendChild(o);
+    });
+    var pick = voices.filter(function (v) { return v.voiceURI === keep; })[0] || voices[0];
+    voice = pick; voiceSel.value = pick.voiceURI;
+  }
+  if (supported) {
+    loadVoices();
+    if (typeof synth.addEventListener === 'function') synth.addEventListener('voiceschanged', loadVoices);
+    else synth.onvoiceschanged = loadVoices;
+  } else loadVoices();
+
+  /* ---------- caption rendering ---------- */
+  function renderChapter(i) {
+    var c = CHAPTERS[i];
+    chapNum.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + CHAPTERS.length).slice(-2);
+    chapTitle.textContent = c.ico + ' ' + c.title;
+    caption.innerHTML = '';
+    c.lines.forEach(function (line, k) {
+      var s = document.createElement('span');
+      s.className = 'ng-sent'; s.dataset.k = k; s.textContent = line + ' ';
+      caption.appendChild(s);
+    });
+    chapBtns.forEach(function (b, k) {
+      b.classList.toggle('ng-active', k === i);
+      b.setAttribute('aria-selected', k === i ? 'true' : 'false');
+    });
+  }
+  function setActiveSentence(i, k) {
+    var spans = caption.querySelectorAll('.ng-sent');
+    for (var j = 0; j < spans.length; j++) {
+      spans[j].classList.toggle('ng-active', j === k);
+      spans[j].classList.toggle('ng-done', j < k);
+    }
+    var active = spans[k];
+    if (active && active.scrollIntoView) {
+      var sc = caption.closest('.ng-scroll');
+      if (sc) { var ar = active.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+        if (ar.bottom > sr.bottom - 8 || ar.top < sr.top + 8) active.scrollIntoView({ block: 'nearest' }); }
+    }
+    bar.style.width = (((offsets[i] + k) / total) * 100).toFixed(1) + '%';
+  }
+  function showIntro() {
+    chapNum.textContent = '00 / ' + ('0' + CHAPTERS.length).slice(-2);
+    chapTitle.textContent = '✦ Welcome';
+    caption.textContent = INTRO;
+    bar.style.width = '0%';
+    chapBtns.forEach(function (b) { b.classList.remove('ng-active'); b.setAttribute('aria-selected', 'false'); });
+  }
+
+  /* ---------- follow-along ---------- */
+  var glowTimer = null;
+  function followTo(anchor) {
+    if (!follow) return;
+    var el = anchor === 'top' ? document.getElementById('top') : document.getElementById(anchor);
+    if (!el) return;
+    var nav = document.getElementById('nav');
+    var navH = nav ? nav.offsetHeight : 0;
+    var y = el.getBoundingClientRect().top + window.pageYOffset - navH - 14;
+    window.scrollTo({ top: Math.max(0, y), behavior: reducedMotion() ? 'auto' : 'smooth' });
+    if (anchor !== 'top') {
+      el.classList.add('ng-section-glow');
+      clearTimeout(glowTimer);
+      glowTimer = setTimeout(function () { el.classList.remove('ng-section-glow'); }, 2700);
+    }
+  }
+
+  /* ---------- speech core ---------- */
+  function setStatus(t) { statusEl.textContent = t; }
+  function setMode(m) {
+    mode = m; root.setAttribute('data-state', m);
+    var playing = (m === 'speaking');
+    playIco.textContent = playing ? '⏸' : '▶';
+    playTxt.textContent = playing ? 'Pause' : (m === 'paused' ? 'Resume' : (finished ? 'Replay Guide' : 'Explain Guide'));
+    playBtn.setAttribute('aria-label', playing ? 'Pause guide' : (m === 'paused' ? 'Resume guide' : 'Explain guide'));
+    stopBtn.disabled = (m === 'idle');
+    syncViz();
+  }
+
+  function speakCurrent() {
+    var c = CHAPTERS[ci];
+    renderChapter(ci);
+    setActiveSentence(ci, si);
+    visited[ci] = true; chapBtns[ci].classList.add('ng-visited');
+    if (si === 0) followTo(c.anchor);
+    var text = c.lines[si];
+    var myGen = gen;
+
+    if (supported) {
+      var u = new window.SpeechSynthesisUtterance(text);
+      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
+      u.rate = rate; u.pitch = 1.02; u.volume = muted ? 0 : vol;
+      u.onend = function () { if (myGen !== gen || mode !== 'speaking') return; advance(); };
+      u.onerror = function (e) {
+        if (myGen !== gen) return;
+        var er = e && e.error;
+        if (er === 'interrupted' || er === 'canceled') return;
+        if (er === 'not-allowed' || er === 'synthesis-failed') {
+          setStatus('Voice blocked — press Explain again'); stop(); return;
+        }
+        if (mode === 'speaking') advance();
+      };
+      try { synth.speak(u); } catch (err) { fallbackSchedule(text, myGen); }
+    } else {
+      fallbackSchedule(text, myGen);
+    }
+  }
+  function fallbackSchedule(text, myGen) {
+    var words = text.split(/\s+/).length;
+    var ms = Math.max(1500, Math.min(9000, words * 360)) / rate;
+    clearTimeout(fbTimer);
+    fbTimer = setTimeout(function () { if (myGen === gen && mode === 'speaking') advance(); }, ms);
+  }
+
+  function advance() {
+    si++;
+    if (si >= CHAPTERS[ci].lines.length) {
+      ci++; si = 0;
+      if (ci >= CHAPTERS.length) { finish(); return; }
+    }
+    speakCurrent();
+  }
+
+  function startFrom(i, k) {
+    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    ci = i; si = k; finished = false;
+    setMode('speaking'); setStatus('Speaking · ' + CHAPTERS[ci].title);
+    speakCurrent();
+  }
+  function play() {
+    if (mode === 'speaking') { pause(); return; }
+    if (mode === 'paused') { resume(); return; }
+    if (finished) { ci = 0; si = 0; finished = false; }
+    startFrom(ci, si);
+  }
+  function pause() {
+    if (mode !== 'speaking') return;
+    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    setMode('paused'); setStatus('Paused');
+  }
+  function resume() {
+    if (mode !== 'paused') return;
+    setMode('speaking'); setStatus('Speaking · ' + CHAPTERS[ci].title);
+    speakCurrent();
+  }
+  function stop() {
+    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    finished = false; ci = 0; si = 0;
+    setMode('idle'); setStatus('Stopped — press Explain to restart');
+    showIntro();
+  }
+  function finish() {
+    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    finished = true; mode = 'idle'; root.setAttribute('data-state', 'idle');
+    bar.style.width = '100%';
+    chapTitle.textContent = '🎉 Tour complete';
+    chapNum.textContent = ('0' + CHAPTERS.length).slice(-2) + ' / ' + ('0' + CHAPTERS.length).slice(-2);
+    caption.textContent = OUTRO;
+    chapBtns.forEach(function (b) { b.classList.add('ng-visited'); b.classList.remove('ng-active'); });
+    setMode('idle'); setStatus('Tour complete — replay anytime');
+    if (follow) followTo('download');
+  }
+  function jumpTo(i) {
+    i = Math.max(0, Math.min(CHAPTERS.length - 1, i));
+    startFrom(i, 0);
+  }
+  function respeakCurrent() {
+    if (mode !== 'speaking') return;
+    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    speakCurrent();
+  }
+
+  /* ---------- visualizer ---------- */
+  var viz = $('ngViz'), vctx = viz.getContext('2d'), vW = 0, vH = 0, vRaf = 0, vOn = false;
+  var BARS = 34, vals = [], targets = [];
+  for (var b = 0; b < BARS; b++) { vals.push(0.08); targets.push(0.08); }
+  function sizeViz() {
+    var r = viz.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    vW = Math.max(1, r.width); vH = Math.max(1, r.height);
+    viz.width = Math.round(vW * dpr); viz.height = Math.round(vH * dpr);
+    vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function drawViz(t) {
+    vctx.clearRect(0, 0, vW, vH);
+    var speaking = (mode === 'speaking');
+    var gap = 3, bw = (vW - gap * (BARS - 1)) / BARS, mid = vH / 2;
+    var grad = vctx.createLinearGradient(0, 0, vW, 0);
+    grad.addColorStop(0, '#00fff9'); grad.addColorStop(0.5, '#b400ff'); grad.addColorStop(1, '#ff2ea6');
+    vctx.fillStyle = grad;
+    for (var i = 0; i < BARS; i++) {
+      if (speaking && !reducedMotion()) {
+        if (Math.random() < 0.28) targets[i] = 0.2 + Math.random() * 0.8;
+      } else {
+        targets[i] = 0.06 + 0.05 * (0.5 + 0.5 * Math.sin(t / 700 + i * 0.5));
+      }
+      vals[i] += (targets[i] - vals[i]) * (speaking ? 0.35 : 0.08);
+      var h = Math.max(2, vals[i] * (vH - 10));
+      var x = i * (bw + gap), y = mid - h / 2;
+      vctx.globalAlpha = speaking ? 0.95 : 0.5;
+      if (vctx.roundRect) { vctx.beginPath(); vctx.roundRect(x, y, bw, h, bw / 2); vctx.fill(); }
+      else vctx.fillRect(x, y, bw, h);
+    }
+    vctx.globalAlpha = 1;
+  }
+  function vizFrame(t) { if (!vOn) return; drawViz(t); vRaf = window.requestAnimationFrame(vizFrame); }
+  function syncViz() {
+    var should = !panel.hidden && !document.hidden && !reducedMotion();
+    if (should && !vOn) { vOn = true; sizeViz(); vRaf = window.requestAnimationFrame(vizFrame); }
+    else if (!should && vOn) { vOn = false; window.cancelAnimationFrame(vRaf); }
+    if (reducedMotion() && !panel.hidden) { sizeViz(); drawViz(0); }
+  }
+  window.addEventListener('resize', function () { if (!panel.hidden) sizeViz(); });
+  document.addEventListener('visibilitychange', syncViz);
+
+  /* ---------- open / close ---------- */
+  function open() {
+    panel.hidden = false; root.setAttribute('data-open', 'true'); fab.setAttribute('aria-expanded', 'true');
+    panel.classList.remove('ng-opening'); void panel.offsetWidth; panel.classList.add('ng-opening');
+    if (supported && !voices.length) loadVoices();
+    syncViz();
+    setTimeout(function () { playBtn.focus(); }, 60);
+  }
+  function close() {
+    if (mode !== 'idle') stop();
+    panel.hidden = true; root.setAttribute('data-open', 'false'); fab.setAttribute('aria-expanded', 'false');
+    syncViz(); fab.focus();
+  }
+  fab.addEventListener('click', function () { panel.hidden ? open() : close(); });
+  closeBtn.addEventListener('click', close);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) close(); });
+
+  /* ---------- controls ---------- */
+  playBtn.addEventListener('click', play);
+  stopBtn.addEventListener('click', stop);
+  prevBtn.addEventListener('click', function () { jumpTo(ci - 1); });
+  nextBtn.addEventListener('click', function () { jumpTo(ci + 1); });
+  replayBtn.addEventListener('click', function () { jumpTo(0); });
+  muteBtn.addEventListener('click', function () {
+    muted = !muted;
+    muteBtn.textContent = muted ? '🔇' : '🔊';
+    muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    muteBtn.setAttribute('aria-label', muted ? 'Unmute voice' : 'Mute voice');
+    if (muted) { volIn.value = 0; volVal.textContent = '0%'; }
+    else { volIn.value = vol || 1; volVal.textContent = Math.round((vol || 1) * 100) + '%'; }
+    respeakCurrent();
+  });
+  voiceSel.addEventListener('change', function () {
+    var pick = voices.filter(function (v) { return v.voiceURI === voiceSel.value; })[0];
+    if (pick) voice = pick;
+    respeakCurrent();
+  });
+  rateIn.addEventListener('input', function () { rate = parseFloat(rateIn.value); rateVal.textContent = rate.toFixed(1) + '×'; });
+  volIn.addEventListener('input', function () {
+    vol = parseFloat(volIn.value); volVal.textContent = Math.round(vol * 100) + '%';
+    if (vol > 0 && muted) { muted = false; muteBtn.textContent = '🔊'; muteBtn.setAttribute('aria-pressed', 'false'); }
+    if (vol === 0 && !muted) { muted = true; muteBtn.textContent = '🔇'; muteBtn.setAttribute('aria-pressed', 'true'); }
+  });
+  followIn.addEventListener('change', function () { follow = followIn.checked; });
+
+  /* ---------- init ---------- */
+  showIntro();
+  setMode('idle');
+})();
