@@ -1,8 +1,8 @@
 /* ============================================================
  * NEXORA — AI Guide engine
- * A voice-narrated tour of the site + browser, built on the Web
- * Speech API. Self-contained: builds its own UI, no dependencies.
- * Degrades to a timed text tour when speech is unavailable.
+ * A voice-narrated tour of the site + browser. Plays pre-rendered
+ * natural-voice clips (guide-voice.js) when present, otherwise the
+ * Web Speech API, otherwise a timed text tour.
  * ============================================================ */
 (function () {
   'use strict';
@@ -12,6 +12,8 @@
   function reducedMotion() { return !!(motionQuery && motionQuery.matches); }
   var synth = window.speechSynthesis || null;
   var supported = !!(synth && typeof window.SpeechSynthesisUtterance === 'function');
+  var VOICE_PACK = (window.NEXORA_GUIDE_VOICE && window.NEXORA_GUIDE_VOICE.lines && typeof window.Audio === 'function') ? window.NEXORA_GUIDE_VOICE : null;
+  var NATURAL = '__nexora_natural__';
 
   /* ---------- tour content (accurate to this site) ---------- */
   var CHAPTERS = [
@@ -79,6 +81,10 @@
   var muted = false, vol = 1, rate = 1, follow = true, autoPlay = false;
   var voices = [], voice = null, fbTimer = null;
   var visited = {};
+  var useNatural = !!VOICE_PACK, clipActive = false, resumeAt = 0;
+  var audioEl = VOICE_PACK ? new window.Audio() : null;
+  if (audioEl) audioEl.preload = 'auto';
+  var actx = null, analyser = null, gainNode = null, freq = null;
 
   /* ---------- build UI ---------- */
   var root = document.createElement('div');
@@ -133,10 +139,12 @@
       voiceSel = $('ngVoice'), rateIn = $('ngRate'), rateVal = $('ngRateVal'),
       volIn = $('ngVol'), volVal = $('ngVolVal'), followIn = $('ngFollow'), autoIn = $('ngAuto'), foot = $('ngFoot');
 
-  foot.textContent = supported
-    ? 'Voice uses your browser’s built-in speech. Nothing is recorded or sent anywhere.'
-    : 'Voice isn’t supported in this browser — the guide will read as text instead.';
-  if (!supported) foot.classList.add('ng-warn');
+  foot.textContent = VOICE_PACK
+    ? 'The guide’s voice is AI-generated (open-source Kokoro TTS) and plays from this site. Nothing you say or do is recorded.'
+    : supported
+      ? 'Voice uses your browser’s built-in speech. Nothing is recorded or sent anywhere.'
+      : 'Voice isn’t supported in this browser — the guide will read as text instead.';
+  if (!supported && !VOICE_PACK) foot.classList.add('ng-warn');
 
   /* chapter chips */
   CHAPTERS.forEach(function (c, i) {
@@ -160,21 +168,36 @@
     return s;
   }
   function loadVoices() {
-    if (!supported) { voiceSel.disabled = true; voiceSel.innerHTML = '<option>Text-only mode</option>'; return; }
-    var all = synth.getVoices() || [];
+    if (!supported && !VOICE_PACK) { voiceSel.disabled = true; voiceSel.innerHTML = '<option>Text-only mode</option>'; return; }
+    var all = supported ? (synth.getVoices() || []) : [];
     voices = all.filter(function (v) { return /^en/i.test(v.lang || ''); });
     if (!voices.length) voices = all.slice();
     voices.sort(function (a, b) { return scoreVoice(b) - scoreVoice(a); });
     var keep = voiceSel.value;
     voiceSel.innerHTML = '';
-    if (!voices.length) { var o = document.createElement('option'); o.textContent = 'Default voice'; voiceSel.appendChild(o); return; }
+    if (VOICE_PACK) {
+      var n = document.createElement('option');
+      n.value = NATURAL; n.textContent = '✦ ' + (VOICE_PACK.label || 'Natural voice');
+      voiceSel.appendChild(n);
+    }
     voices.forEach(function (v) {
       var o = document.createElement('option');
       o.value = v.voiceURI; o.textContent = v.name.replace(/\s*\(.*?\)\s*/g, ' ').trim() + ' · ' + v.lang;
       voiceSel.appendChild(o);
     });
-    var pick = voices.filter(function (v) { return v.voiceURI === keep; })[0] || voices[0];
-    voice = pick; voiceSel.value = pick.voiceURI;
+    if (!voiceSel.options.length) { var d = document.createElement('option'); d.textContent = 'Default voice'; voiceSel.appendChild(d); }
+    var keepVoice = voices.filter(function (v) { return v.voiceURI === keep; })[0];
+    voice = keepVoice || voices[0] || null;
+    if (VOICE_PACK && (!keepVoice || keep === NATURAL)) voiceSel.value = NATURAL;
+    else if (voice) voiceSel.value = voice.voiceURI;
+    applyVoiceChoice();
+  }
+  function applyVoiceChoice() {
+    useNatural = !!VOICE_PACK && voiceSel.value === NATURAL;
+    if (!useNatural) {
+      var pick = voices.filter(function (v) { return v.voiceURI === voiceSel.value; })[0];
+      if (pick) voice = pick;
+    }
   }
   if (supported) {
     loadVoices();
@@ -249,16 +272,89 @@
     syncViz();
   }
 
-  function speakCurrent() {
+  function haltAll() {
+    gen++; clipActive = false;
+    if (supported) synth.cancel();
+    if (audioEl) audioEl.pause();
+    clearTimeout(fbTimer);
+  }
+
+  /* Route the clip through WebAudio so the visualizer can read real levels. Must run in a user gesture. */
+  function ensureAudioGraph() {
+    if (!audioEl) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!actx && AC) {
+      try {
+        actx = new AC();
+        var src = actx.createMediaElementSource(audioEl);
+        analyser = actx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.6;
+        gainNode = actx.createGain();
+        src.connect(analyser); analyser.connect(gainNode); gainNode.connect(actx.destination);
+        freq = new Uint8Array(analyser.frequencyBinCount);
+      } catch (e) { actx = null; analyser = null; gainNode = null; }
+    }
+    if (actx && actx.state === 'suspended' && actx.resume) actx.resume();
+    applyVolume();
+  }
+  function applyVolume() {
+    if (!audioEl) return;
+    var v = muted ? 0 : vol;
+    if (gainNode) { gainNode.gain.value = v; audioEl.volume = 1; }
+    else audioEl.volume = v;
+  }
+
+  function speakCurrent(startAt) {
     var c = CHAPTERS[ci];
     renderChapter(ci);
     setActiveSentence(ci, si);
     setStatus('Speaking · ' + c.title);
     visited[ci] = true; chapBtns[ci].classList.add('ng-visited');
-    if (si === 0) followTo(c.anchor);
+    if (si === 0 && !startAt) followTo(c.anchor);
     var text = c.lines[si];
     var myGen = gen;
+    var entry = useNatural ? VOICE_PACK.lines[c.id + '-' + si] : null;
+    if (entry && entry.t === text) playClip(VOICE_PACK.base + entry.f, text, myGen, startAt || 0);
+    else speakSynth(text, myGen);
+  }
 
+  var curClip = '', prefetchEl = null;
+  function playClip(url, text, myGen, startAt) {
+    clipActive = true;
+    var failed = false;
+    function fail() {
+      if (failed || myGen !== gen) return;
+      failed = true; clipActive = false; curClip = '';
+      speakSynth(text, myGen);
+    }
+    audioEl.onended = function () { if (myGen !== gen || mode !== 'speaking') return; clipActive = false; advance(); };
+    audioEl.onerror = fail;
+    if (curClip !== url) { curClip = url; audioEl.src = url; }
+    audioEl.defaultPlaybackRate = rate; audioEl.playbackRate = rate;
+    try { audioEl.currentTime = startAt; } catch (e) { /* not seekable yet; starts at 0 */ }
+    applyVolume();
+    var p = audioEl.play();
+    if (p && p.catch) p.catch(function (err) {
+      if (myGen !== gen || failed) return;
+      var n = err && err.name;
+      if (n === 'AbortError') return;
+      if (n === 'NotAllowedError') { clipActive = false; stop(); setStatus('Voice blocked — press Explain again'); return; }
+      fail();
+    });
+    prefetchNext();
+  }
+  function prefetchNext() {
+    var c = CHAPTERS[ci], k = si + 1, j = ci;
+    if (k >= c.lines.length) { j++; k = 0; }
+    if (j >= CHAPTERS.length) return;
+    var e = VOICE_PACK.lines[CHAPTERS[j].id + '-' + k];
+    if (!e) return;
+    if (!prefetchEl) { prefetchEl = new window.Audio(); prefetchEl.preload = 'auto'; prefetchEl.muted = true; }
+    var u = VOICE_PACK.base + e.f;
+    if (prefetchEl.getAttribute('src') !== u) prefetchEl.src = u;
+  }
+
+  function speakSynth(text, myGen) {
+    clipActive = false;
     if (supported) {
       var u = new window.SpeechSynthesisUtterance(text);
       if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
@@ -269,7 +365,7 @@
         var er = e && e.error;
         if (er === 'interrupted' || er === 'canceled') return;
         if (er === 'not-allowed' || er === 'synthesis-failed') {
-          setStatus('Voice blocked — press Explain again'); stop(); return;
+          stop(); setStatus('Voice blocked — press Explain again'); return;
         }
         if (mode === 'speaking') advance();
       };
@@ -302,7 +398,7 @@
 
   /* On-demand: a topic finished — stop and wait for the user to pick the next. */
   function endTopic() {
-    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    haltAll();
     var done = ci;
     chapBtns[done].classList.add('ng-visited');
     si = 0;
@@ -330,12 +426,13 @@
   }
 
   function startFrom(i, k) {
-    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    haltAll();
     ci = i; si = k; finished = false;
     setMode('speaking'); setStatus('Speaking · ' + CHAPTERS[ci].title);
     speakCurrent();
   }
   function play() {
+    ensureAudioGraph();
     if (mode === 'speaking') { pause(); return; }
     if (mode === 'paused') { resume(); return; }
     if (finished) { ci = 0; si = 0; finished = false; }
@@ -343,22 +440,24 @@
   }
   function pause() {
     if (mode !== 'speaking') return;
-    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    resumeAt = (clipActive && audioEl) ? audioEl.currentTime : 0;
+    haltAll();
     setMode('paused'); setStatus('Paused');
   }
   function resume() {
     if (mode !== 'paused') return;
     setMode('speaking'); setStatus('Speaking · ' + CHAPTERS[ci].title);
-    speakCurrent();
+    var at = resumeAt; resumeAt = 0;
+    speakCurrent(at);
   }
   function stop() {
-    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    haltAll();
     finished = false; ci = 0; si = 0;
     setMode('idle'); setStatus('Stopped — press Explain to restart');
     showIntro();
   }
   function finish() {
-    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    haltAll();
     finished = true; mode = 'idle'; root.setAttribute('data-state', 'idle');
     bar.style.width = '100%';
     chapTitle.textContent = '🎉 Tour complete';
@@ -369,12 +468,13 @@
     if (follow) followTo('download');
   }
   function jumpTo(i) {
+    ensureAudioGraph();
     i = Math.max(0, Math.min(CHAPTERS.length - 1, i));
     startFrom(i, 0);
   }
   function respeakCurrent() {
     if (mode !== 'speaking') return;
-    gen++; if (supported) synth.cancel(); clearTimeout(fbTimer);
+    haltAll();
     speakCurrent();
   }
 
@@ -392,12 +492,17 @@
   function drawViz(t) {
     vctx.clearRect(0, 0, vW, vH);
     var speaking = (mode === 'speaking');
+    var live = speaking && clipActive && analyser && freq && !reducedMotion();
+    if (live) analyser.getByteFrequencyData(freq);
     var gap = 3, bw = (vW - gap * (BARS - 1)) / BARS, mid = vH / 2;
     var grad = vctx.createLinearGradient(0, 0, vW, 0);
     grad.addColorStop(0, '#00fff9'); grad.addColorStop(0.5, '#b400ff'); grad.addColorStop(1, '#ff2ea6');
     vctx.fillStyle = grad;
     for (var i = 0; i < BARS; i++) {
-      if (speaking && !reducedMotion()) {
+      if (live) {
+        var d = Math.abs(i - (BARS - 1) / 2) / (BARS / 2);
+        targets[i] = 0.06 + (freq[1 + Math.floor(d * 22)] / 255) * 0.94;
+      } else if (speaking && !reducedMotion()) {
         if (Math.random() < 0.28) targets[i] = 0.2 + Math.random() * 0.8;
       } else {
         targets[i] = 0.06 + 0.05 * (0.5 + 0.5 * Math.sin(t / 700 + i * 0.5));
@@ -451,18 +556,23 @@
     muteBtn.setAttribute('aria-label', muted ? 'Unmute voice' : 'Mute voice');
     if (muted) { volIn.value = 0; volVal.textContent = '0%'; }
     else { volIn.value = vol || 1; volVal.textContent = Math.round((vol || 1) * 100) + '%'; }
-    respeakCurrent();
+    if (!muted && !vol) vol = 1;
+    if (clipActive) applyVolume(); else respeakCurrent();
   });
   voiceSel.addEventListener('change', function () {
-    var pick = voices.filter(function (v) { return v.voiceURI === voiceSel.value; })[0];
-    if (pick) voice = pick;
+    ensureAudioGraph();
+    applyVoiceChoice();
     respeakCurrent();
   });
-  rateIn.addEventListener('input', function () { rate = parseFloat(rateIn.value); rateVal.textContent = rate.toFixed(1) + '×'; });
+  rateIn.addEventListener('input', function () {
+    rate = parseFloat(rateIn.value); rateVal.textContent = rate.toFixed(1) + '×';
+    if (audioEl) { audioEl.defaultPlaybackRate = rate; audioEl.playbackRate = rate; }
+  });
   volIn.addEventListener('input', function () {
     vol = parseFloat(volIn.value); volVal.textContent = Math.round(vol * 100) + '%';
     if (vol > 0 && muted) { muted = false; muteBtn.textContent = '🔊'; muteBtn.setAttribute('aria-pressed', 'false'); }
     if (vol === 0 && !muted) { muted = true; muteBtn.textContent = '🔇'; muteBtn.setAttribute('aria-pressed', 'true'); }
+    applyVolume();
   });
   followIn.addEventListener('change', function () { follow = followIn.checked; });
   autoIn.addEventListener('change', function () { autoPlay = autoIn.checked; });
