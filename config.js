@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
  * NEXORA Website configuration — EDIT THESE WHEN GOING PUBLIC
  * ------------------------------------------------------------
  * Until the real URLs below are filled in, download buttons stay
@@ -8,19 +8,18 @@
 window.NEXORA_SITE = {
   githubRepoUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser",
 
-  releasesUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/tag/v1.0.8",
+  releasesUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases",
 
-  // Portable ZIP pinned to the published v1.0.8 build:
-  // extract, open "NEXORA Browser", run launch.bat (or NEXORA.exe).
+  // Portable ZIP: extract, open "NEXORA Browser", run launch.bat (or NEXORA.exe).
   windowsInstallerUrl: "https://github.com/khanhishan70-stack/NEXORA-Browser/releases/download/v1.0.8/NEXORA-Browser-Windows-x64.zip",
 
-  releaseInfo: { version: "1.0.8", date: "2026-10-10", size: "246 MB", arch: "Windows x64" },
+  releaseInfo: { version: "1.0.9", date: "2026-11-17", size: "246 MB", arch: "Windows x64" },
 
   // Contact for security reports, when available.
   securityContact: "",
 
   // Google Analytics 4 (website stats ONLY: visitor countries + Download
-  // button clicks). The BROWSER itself still tracks nobody.
+  // button clicks). The BROWSER itself tracks nobody.
   // Leave "" = zero tracking. To activate: create a free GA4 property at
   // https://analytics.google.com, then paste its Measurement ID here.
   // Example: "G-ABC123XYZ9"
